@@ -128,8 +128,12 @@ interface KvCacheDao {
         TimetableSyncEntity::class,
         RoomOccupancyEntity::class,
         DisplayOverrideEntity::class,
+        CountdownEntity::class,
+        NewsArticleEntity::class,
+        GradeEntity::class,
+        ExamEntity::class,
     ],
-    version = 10,
+    version = 13,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -146,6 +150,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun timetableSyncDao(): TimetableSyncDao
     abstract fun roomOccupancyDao(): RoomOccupancyDao
     abstract fun displayOverrideDao(): DisplayOverrideDao
+    abstract fun countdownDao(): CountdownDao
+    abstract fun newsDao(): NewsDao
+    abstract fun gradeDao(): GradeDao
+    abstract fun examDao(): ExamDao
 
     companion object {
         @Volatile
@@ -322,6 +330,69 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v11：新增倒数日表（countdowns）与校园资讯雷达缓存表（news_articles）。
+         * 全是新表与索引，不影响已有课表/电量/专注/校园卡数据。
+         */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `countdowns` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`targetDate` TEXT NOT NULL, `category` TEXT NOT NULL, `location` TEXT, " +
+                        "`pinned` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `news_articles` (" +
+                        "`url` TEXT NOT NULL, `channel` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`publishDate` TEXT NOT NULL, `summarySnippet` TEXT NOT NULL, " +
+                        "`contentText` TEXT, `aiSummary` TEXT, `isRead` INTEGER NOT NULL, " +
+                        "`isBookmarked` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`url`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_news_articles_channel` ON `news_articles` (`channel`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_news_articles_publishDate` ON `news_articles` (`publishDate`)")
+            }
+        }
+
+        /**
+         * v12：新增成绩缓存表（academic_grades）与官方考场安排表（academic_exams）。
+         * 全是新表，不动已有课表/电量/专注/校园卡/倒数日/资讯数据。
+         */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `academic_grades` (" +
+                        "`id` TEXT NOT NULL, `semesterCode` TEXT NOT NULL, `semesterName` TEXT NOT NULL, " +
+                        "`courseCode` TEXT NOT NULL, `courseName` TEXT NOT NULL, `credits` REAL NOT NULL, " +
+                        "`gp` REAL, `finalGrade` TEXT NOT NULL, `passed` INTEGER NOT NULL, " +
+                        "`retake` INTEGER NOT NULL, `isMinor` INTEGER NOT NULL, `isUnevaluated` INTEGER NOT NULL, " +
+                        "`courseType` TEXT, `courseProperty` TEXT, `displayTag` TEXT, " +
+                        "`subGradesJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `academic_exams` (" +
+                        "`id` TEXT NOT NULL, `courseName` TEXT NOT NULL, `examDate` TEXT, " +
+                        "`weekDay` INTEGER NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER NOT NULL, " +
+                        "`place` TEXT NOT NULL, `examType` TEXT, `isMinor` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
+        /**
+         * v13：news_articles 新增多栏目归属（channels）、信息来源（sourceName）与附件清单（attachmentsJson）。
+         * 并把存量记录的 `channel` 幂等回填至 `channels`，保留用户已读、收藏与 AI 摘要。
+         */
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `news_articles` ADD COLUMN `channels` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `news_articles` ADD COLUMN `sourceName` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `news_articles` ADD COLUMN `attachmentsJson` TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("UPDATE `news_articles` SET `channels` = ',' || `channel` || ',' WHERE `channels` = ''")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -337,6 +408,9 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_7_8,
                 MIGRATION_8_9,
                 MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+                MIGRATION_12_13,
             )
                 .build()
                 .also { instance = it }

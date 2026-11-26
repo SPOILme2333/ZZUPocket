@@ -204,8 +204,10 @@ class ScheduleViewModel : ViewModel() {
 
     // ── 研究生课表（gmsstu / 研究生院那套系统）──────────────────────────
 
-    /** 学籍只判一次（每个 ViewModel 生命周期内） */
+    /** 学籍只判一次（每个 ViewModel 生命周期内），账号重登录后重置 */
     private var gradProbed = false
+    /** 上一次观察到的登录时间戳：用于识别“已登录态下因教务 401 去重登”后的强制刷新（Issue #2） */
+    private var lastObservedLoginAt: Long = runCatching { AppGraph.tokenStore.lastLoginAt }.getOrDefault(0L)
 
     /**
      * 学籍判定：拿同一枚令牌问一次本科教务的用户信息接口。
@@ -555,10 +557,26 @@ cacheNoticeNeedsLogin = expired,
     fun onResume() {
         // 从「课程表设置」改完周次参数回来：先把新参数读进来（纯本地，不联网）
         viewModelScope.launch { reloadWeekSettings() }
+        val currentLoginAt = runCatching { AppGraph.tokenStore.lastLoginAt }.getOrDefault(0L)
+        val reLoggedIn = currentLoginAt != lastObservedLoginAt
+        if (reLoggedIn) {
+            lastObservedLoginAt = currentLoginAt
+            gradProbed = false
+            _state.update {
+                it.copy(
+                    error = null,
+                    cacheNotice = null,
+                    cacheNoticeNeedsLogin = false,
+                )
+            }
+        }
         if (!_state.value.started) {
             viewModelScope.launch { bootstrap() }
-        } else if (_state.value.loggedIn != auth.isLoggedIn()) {
-            viewModelScope.launch { bootstrap() }
+        } else if (_state.value.loggedIn != auth.isLoggedIn() || reLoggedIn) {
+            viewModelScope.launch {
+                bootstrap()
+                if (auth.isLoggedIn() && reLoggedIn) refresh()
+            }
         } else if (_state.value.gradMode) {
             // 研究生周次是用「本周课表」反推的；跨天后重新对齐一次。
             // 同一天切回课表页不重复拉取（3 个请求），避免无谓流量。
@@ -740,6 +758,7 @@ cacheNoticeNeedsLogin = expired,
             }
             // 节次是渲染网格表头必需的，但 refreshCourseTable 不带它——同步成功后补一次
             if (repo.periods().isEmpty()) runCatching { repo.refreshPeriods() }
+            runCatching { AppGraph.classReminderScheduler.reschedule() }
             renderLocal(semester, null)
             return
         }
@@ -754,6 +773,7 @@ cacheNoticeNeedsLogin = expired,
                 }
                 // 同上：节次缺失时顺手补齐
                 if (repo.periods().isEmpty()) runCatching { repo.refreshPeriods() }
+                runCatching { AppGraph.classReminderScheduler.reschedule() }
             } catch (e: Throwable) {
                 if (e is kotlinx.coroutines.CancellationException &&
                     e !is kotlinx.coroutines.TimeoutCancellationException
@@ -935,6 +955,7 @@ cacheNoticeNeedsLogin = expired,
             AppGraph.appContextOrNull()?.let { ctx ->
                 runCatching { Widgets.refreshAll(ctx) }
                     .onFailure { Log.w("ScheduleViewModel", "补录后刷新小组件失败", it) }
+                runCatching { AppGraph.classReminderScheduler.reschedule() }
             }
             _state.update {
                 it.copy(planNotice = "已保存到课表 · 「首页」与桌面小组件已同步")
@@ -955,6 +976,7 @@ cacheNoticeNeedsLogin = expired,
                 AppGraph.appContextOrNull()?.let { ctx ->
                     runCatching { Widgets.refreshAll(ctx) }
                         .onFailure { Log.w("ScheduleViewModel", "删除补录后刷新小组件失败", it) }
+                    runCatching { AppGraph.classReminderScheduler.reschedule() }
                 }
                 _state.update {
                     it.copy(planNotice = "已从课表移除 · 桌面小组件已同步")

@@ -1,50 +1,40 @@
 package com.zzupocket.app.ui.campus
 
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.SettingsInputAntenna
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.EventSeat
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import com.zzupocket.app.ui.components.GlassCard
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.EventSeat
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,404 +44,587 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.prefs.UiPrefs
-import com.zzupocket.app.ui.components.DescriptionText
-import com.zzupocket.app.ui.components.LocalShowDescriptions
-import com.zzupocket.app.data.update.AppRelease
+import com.zzupocket.app.data.repo.ScheduleIcsExportHelper
 import com.zzupocket.app.data.update.AppUpdate
 import com.zzupocket.app.data.update.UpdateCenter
+import com.zzupocket.app.domain.AcademicStats
+import com.zzupocket.app.domain.EnergyStats
+import com.zzupocket.app.domain.FocusStats
+import com.zzupocket.app.domain.GpaRankSummary
+import com.zzupocket.app.domain.PomodoroClock
+import com.zzupocket.app.domain.StudentProfile
+import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.GlassInsetDivider
+import com.zzupocket.app.ui.components.GlassListCard
+import com.zzupocket.app.ui.components.GlassListRow
+import com.zzupocket.app.ui.components.GlassMetricCell
+import com.zzupocket.app.ui.components.GlassSectionHeader
+import com.zzupocket.app.ui.components.LiquidGlassButton
+import com.zzupocket.app.ui.components.LiquidGlassIconButton
+import com.zzupocket.app.ui.components.MiniSparkline
 import com.zzupocket.app.ui.nav.DOCK_CLEARANCE
+import com.zzupocket.app.ui.theme.tabularNumbers
+import com.zzupocket.app.ui.today.CountdownManagerSheet
+import com.zzupocket.app.ui.today.TodayCardViewModel
+import com.zzupocket.app.ui.today.TodayTimelineViewModel
+import com.zzupocket.app.ui.today.TodayViewModel
+import java.time.LocalDate
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
- * 「校园」= 分组入口页（空教室已按需求从「课表」移到这里）。
- *
- * 只放用户功能入口；开发期的接口自检收在「登录状态」页里，且只在 debug 包显示。
+ * 「校园」克制液态玻璃分组看板：零嵌套卡片、零多余胶囊、状态直接落进内容数值。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CampusScreen(
     onOpenLogin: () -> Unit,
-    onOpenDiagnostics: () -> Unit,
-    /** 更多 → 网关认证：学校统一身份验证网关的状态与手动兜底 */
-    onOpenGateway: () -> Unit = {},
     onOpenElectricity: () -> Unit = {},
     onOpenCard: () -> Unit = {},
     onOpenRooms: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
-    onOpenAbout: () -> Unit = {},
+    onOpenLibRecords: () -> Unit = {},
+    onOpenFocus: () -> Unit = {},
+    onOpenGrades: () -> Unit = {},
+    onOpenExams: () -> Unit = {},
+    onOpenStudentStatus: () -> Unit = {},
+    onOpenTrainingPlan: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
-    onOpenWidgetSettings: () -> Unit = {},
+    todayVm: TodayViewModel = viewModel(),
+    cardVm: TodayCardViewModel = viewModel(),
+    timelineVm: TodayTimelineViewModel = viewModel(),
 ) {
-    var loggedIn by remember { mutableStateOf(AppGraph.authRepository.isLoggedIn()) }
-    // 从登录页返回时重新读一次：这一页没有自己的 ViewModel，否则会一直显示"登录 / 切换账号"
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        loggedIn = AppGraph.authRepository.isLoggedIn()
-    }
-
-    // ── 检测更新：状态存放在 data.update.UpdateCenter（开屏已静默查过一次）──
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 「显示描述」是全局偏好：改一下 AppNav 根部的 CompositionLocal 就会全树重组
-    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = UiPrefs())
+    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = AppGraph.uiPrefsStore.latest)
+
+    val todayState by todayVm.state.collectAsStateWithLifecycle()
+    val cardState by cardVm.state.collectAsStateWithLifecycle()
+    val timelineState by timelineVm.state.collectAsStateWithLifecycle()
+    val timerUi by AppGraph.pomodoroEngine.state.collectAsStateWithLifecycle()
+    val countdowns by AppGraph.countdownRepository.observeAll()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val grades by AppGraph.academicRepository.observeGrades()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val exams by AppGraph.academicRepository.observeExams()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+
+    var loggedIn by remember { mutableStateOf(AppGraph.authRepository.isLoggedIn()) }
+    var cachedRoomCount by remember { mutableStateOf<Int?>(null) }
+    var cachedGpaRank by remember { mutableStateOf<GpaRankSummary?>(null) }
+    var cachedProfile by remember { mutableStateOf<StudentProfile?>(null) }
+    var showCountdownSheet by remember { mutableStateOf(false) }
+
     val currentVersion = remember { AppUpdate.localVersion(context) }
     val remoteRelease by UpdateCenter.release.collectAsState(initial = null)
     val mutedVersion by UpdateCenter.mutedVersion.collectAsState(initial = null)
     val showDot = AppUpdate.shouldShowDot(currentVersion, remoteRelease?.version, mutedVersion)
-    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    var pendingIcs by remember { mutableStateOf<String?>(null) }
+    val createIcsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/calendar"),
+    ) { uri ->
+        val content = pendingIcs
+        pendingIcs = null
+        if (uri != null && content != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(content.toByteArray(Charsets.UTF_8))
+                }
+            }.onSuccess {
+                Toast.makeText(context, "课表日历 (.ics) 已导出", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "导出失败：${it.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        loggedIn = AppGraph.authRepository.isLoggedIn()
+        todayVm.onResume()
+        cardVm.reload()
+        timelineVm.reload()
+        scope.launch {
+            val todayIso = LocalDate.now().toString()
+            val summary = runCatching { AppGraph.scheduleRepository.roomSnapshotSummary() }
+                .getOrDefault(emptyList())
+            cachedRoomCount = summary.filter { it.date == todayIso }.sumOf { it.rooms }
+                .takeIf { it > 0 }
+            cachedGpaRank = runCatching { AppGraph.academicRepository.cachedGpaRank() }.getOrNull()
+            cachedProfile = runCatching { AppGraph.academicRepository.cachedProfiles().firstOrNull() }.getOrNull()
+        }
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("更多") }) },
+        containerColor = Color.Transparent,
+        topBar = {
+            TopAppBar(
+                title = { Text("校园", style = MaterialTheme.typography.headlineMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                actions = {
+                    LiquidGlassIconButton(
+                        icon = Icons.Outlined.Palette,
+                        contentDescription = "外观与配色",
+                        onClick = onOpenAppearance,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    LiquidGlassIconButton(
+                        icon = Icons.Outlined.Settings,
+                        contentDescription = "设置",
+                        badgeDot = showDot,
+                        onClick = onOpenSettings,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                },
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
-                // 悬浮 dock 是覆盖层：垫出尾部余量，末尾条目能完整滚出胶囊
                 .padding(bottom = DOCK_CLEARANCE),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GroupTitle("账号")
-            EntryCard {
-                // 登录态直接写进副标题，一个入口两种状态 ——
-                // 之前"已登录 / 登录状态"两个条目登录后都指向同一个页，纯属重复。
-                // 已登录时别把用户丢到登录表单上（issue #2 报告者提出）。
-                Entry(
-                    Icons.Filled.Person,
-                    "账号",
-                    // 登录态本身就是全部信息，页面里自然有「查看/退出」的动作，不必在副标题复述
-                    if (loggedIn) "已登录" else "未登录 · 点这里登录",
-                    if (loggedIn) onOpenDiagnostics else onOpenLogin,
-                    // 登录态是状态，不是描述：关掉「显示描述」也必须留着
-                    alwaysShowSubtitle = true,
-                )
-                Entry(Icons.Filled.Info, "关于", "数据来源、隐私与致谢", onOpenAbout)
-                Entry(
-                    Icons.Filled.VpnKey,
-                    "网关认证",
-                    "学校统一身份验证的状态与手动处理",
-                    onOpenGateway,
-                )
+            if (!loggedIn && todayState.light.kwh == null && cardState.balance == null) {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("绑定郑大账号", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "登录后自动同步电费、校园卡流水与教室占用",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        LiquidGlassButton(onClick = onOpenLogin) {
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("登录")
+                        }
+                    }
+                }
             }
 
-            GroupTitle("学习空间")
-            EntryCard {
-                Entry(Icons.Filled.MeetingRoom, "教室占用", "按楼查空教室", onOpenRooms)
-                Entry(Icons.Filled.EventSeat, "图书馆座位预约", "学校原版网页", onOpenLibrary)
-            }
+            // 1. 生活：宿舍电量 + 校园卡
+            GlassSectionHeader("生活")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                val threshold = if (prefs.lowEnergyAlertEnabled) {
+                    prefs.lowEnergyThresholdKwh.toDouble()
+                } else {
+                    EnergyStats.LOW_KWH
+                }
+                val primaryMeter = todayState.light.takeIf { it.kwh != null || it.roomId.isNotBlank() }
+                    ?: todayState.ac
+                val lowPower = listOfNotNull(todayState.light.kwh, todayState.ac.kwh)
+                    .any { it < threshold }
 
-            GroupTitle("生活服务")
-            EntryCard {
-                Entry(Icons.Filled.Bolt, "电费", "照明 + 空调用量", onOpenElectricity)
-                Entry(Icons.Filled.CreditCard, "校园卡", "余额与流水", onOpenCard)
-            }
+                GlassCard(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = onOpenElectricity,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.Bolt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "宿舍电量",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
 
-            GroupTitle("外观")
-            EntryCard {
-                Entry(Icons.Filled.Palette, "配色与深色模式", "配色与深浅色", onOpenAppearance)
-            }
+                        if (primaryMeter.kwh != null) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    text = formatCampusNum(primaryMeter.kwh!!),
+                                    style = MaterialTheme.typography.headlineSmall.tabularNumbers(),
+                                    color = if (lowPower) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = " 度",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = if (loggedIn) "暂未查询" else "未登录",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
 
-            GroupTitle("界面")
-            EntryCard {
-                ListItem(
-                    headlineContent = { Text("显示描述") },
-                    // 开关自己这行说明也受控：关掉后整行只留标题 + 开关，不占副标题高度
-                    supportingContent = if (prefs.showDescriptions) {
-                        { DescriptionText("开启时显示原理、例外与错误原因") }
-                    } else {
-                        null
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = prefs.showDescriptions,
-                            onCheckedChange = {
-                                scope.launch { AppGraph.uiPrefsStore.setShowDescriptions(it) }
-                            },
+                        val baseSecondary = buildString {
+                            if (todayState.light.kwh != null && todayState.ac.kwh != null) {
+                                append("空调 ${formatCampusNum(todayState.ac.kwh!!)} 度")
+                            } else if (todayState.trendTotalKwh > 0) {
+                                append("近 7 天 ${formatCampusNum(todayState.trendTotalKwh)} 度")
+                            } else {
+                                append(todayState.roomHint.ifBlank { "照明 + 空调用量" })
+                            }
+                        }
+                        val secondaryText = if (lowPower) "偏低 · $baseSecondary" else baseSecondary
+                        Text(
+                            text = secondaryText,
+                            style = MaterialTheme.typography.bodySmall.tabularNumbers(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    },
-                )
-                ListItem(
-                    headlineContent = { Text("底栏显示「专注」") },
-                    // 专注页只有底栏这一个入口：关掉之后就真的进不去了。说明必须写出来，
-                    // 否则用户会以为是"藏起来了"，找不到别的地方进。
-                    supportingContent = if (prefs.showDescriptions) {
-                        { DescriptionText("关闭后底栏不再显示「专注」，专注页也没有别的入口") }
-                    } else {
-                        null
-                    },
-                    trailingContent = {
-                        Switch(
-                            checked = prefs.showFocusInDock,
-                            onCheckedChange = {
-                                scope.launch { AppGraph.uiPrefsStore.setShowFocusInDock(it) }
-                            },
+
+                        if (todayState.trend.isNotEmpty()) {
+                            Spacer(Modifier.weight(1f, fill = false))
+                            MiniSparkline(
+                                values = todayState.trend.map { (it.light + it.ac).toFloat() },
+                                lineColor = if (lowPower) {
+                                    MaterialTheme.colorScheme.tertiary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(24.dp),
+                            )
+                        }
+                    }
+                }
+
+                GlassCard(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = onOpenCard,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "校园卡",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+
+                        if (cardState.balance != null) {
+                            Text(
+                                text = "¥${String.format(Locale.US, "%.2f", cardState.balance)}",
+                                style = MaterialTheme.typography.headlineSmall.tabularNumbers(),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val spendLabel = if (cardState.todayCount > 0) {
+                                "今日 ${cardState.todayCount} 笔 · ¥${String.format(Locale.US, "%.2f", cardState.todaySpend)}"
+                            } else {
+                                cardState.lastTrade ?: "点击查看收支明细"
+                            }
+                            Text(
+                                text = spendLabel,
+                                style = MaterialTheme.typography.bodySmall.tabularNumbers(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        } else {
+                            Text(
+                                text = if (loggedIn) "暂未查询" else "未登录",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. 教务：1 卡 3 格 + 竖向细线
+            GlassSectionHeader("教务")
+            val campusToday = remember { LocalDate.now() }
+            val displayGpa = remember(cachedGpaRank, grades) {
+                cachedGpaRank?.gpa ?: AcademicStats.weightedGpa(grades)
+            }
+            val upcomingExams = remember(exams, campusToday) {
+                exams.filter { !it.isFinished(campusToday) }
+            }
+            val nextExam = upcomingExams.firstOrNull()
+            val examUrgent = nextExam?.daysUntil(campusToday)?.let { it in 0..3 } == true
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                    ) {
+                        GlassMetricCell(
+                            label = "成绩",
+                            value = displayGpa?.let { String.format(Locale.US, "%.2f", it) }
+                                ?: if (grades.isNotEmpty()) "${grades.size} 门" else "—",
+                            caption = "GPA",
+                            onClick = onOpenGrades,
+                            modifier = Modifier.weight(1f),
+                        )
+                        VerticalDivider(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .padding(vertical = 12.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.70f),
+                        )
+                        val examValue = when {
+                            nextExam == null -> "—"
+                            nextExam.daysUntil(campusToday) == 0 -> "今天"
+                            nextExam.daysUntil(campusToday) != null -> "${nextExam.daysUntil(campusToday)} 天后"
+                            else -> "${upcomingExams.size} 门"
+                        }
+                        GlassMetricCell(
+                            label = "考场",
+                            value = examValue,
+                            caption = if (upcomingExams.isNotEmpty()) "${upcomingExams.size} 门待考" else "暂无安排",
+                            valueColor = if (examUrgent) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                            onClick = onOpenExams,
+                            modifier = Modifier.weight(1f),
+                        )
+                        VerticalDivider(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .padding(vertical = 12.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.70f),
+                        )
+                        GlassMetricCell(
+                            label = "学籍",
+                            value = cachedProfile?.statusText ?: "查看",
+                            caption = "学籍档案",
+                            onClick = onOpenStudentStatus,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    GlassInsetDivider(startIndent = 16.dp)
+                    GlassListRow(
+                        icon = Icons.Outlined.School,
+                        title = "培养方案与完成情况",
+                        trailing = "学分进度",
+                        onClick = onOpenTrainingPlan,
+                    )
+                }
+            }
+
+            // 3. 学习空间：单张分组列表卡
+            GlassSectionHeader("学习空间")
+            GlassListCard {
+                GlassListRow(
+                    icon = Icons.Outlined.MeetingRoom,
+                    title = "空教室查询",
+                    trailing = cachedRoomCount?.let { "$it 间" },
+                    onClick = onOpenRooms,
+                )
+                GlassInsetDivider()
+                GlassListRow(
+                    icon = Icons.Outlined.EventSeat,
+                    title = "图书馆预约",
+                    trailing = "选座系统",
+                    onClick = onOpenLibrary,
+                )
+                GlassInsetDivider()
+                GlassListRow(
+                    icon = Icons.Outlined.History,
+                    title = "我的座位预约记录",
+                    onClick = onOpenLibRecords,
+                )
+            }
+
+            // 4. 专注与倒数：双磁贴
+            GlassSectionHeader("专注与倒数")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                val focusActive = !timerUi.idle
+                GlassCard(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = onOpenFocus,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "番茄专注",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = if (focusActive) {
+                                PomodoroClock.format(timerUi.remainingSeconds)
+                            } else if (timelineState.focusSeconds > 0) {
+                                FocusStats.humanDuration(timelineState.focusSeconds)
+                            } else {
+                                "待开启"
+                            },
+                            style = MaterialTheme.typography.headlineSmall.tabularNumbers(),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = if (focusActive) {
+                                "${timerUi.phase.label}进行中"
+                            } else {
+                                "今日已完成 ${timelineState.focusCount} 轮"
+                            },
+                            style = MaterialTheme.typography.bodySmall.tabularNumbers(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                val todayDate = remember { LocalDate.now() }
+                val nearest = remember(countdowns, todayDate) {
+                    countdowns.firstOrNull { !it.isExpired(todayDate) }
+                }
+                val nearestDays = nearest?.daysUntil(todayDate)
+                val urgent = nearestDays != null && nearestDays <= 3
+                GlassCard(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = { showCountdownSheet = true },
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = "考试倒数",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        when {
+                            nearest == null || nearestDays == null -> Text(
+                                text = "点击添加",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            nearestDays == 0 -> Text(
+                                text = "今天",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                maxLines = 1,
+                            )
+                            else -> Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                    text = "$nearestDays",
+                                    style = MaterialTheme.typography.headlineSmall.tabularNumbers(),
+                                    color = if (urgent) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = " 天",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 2.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            text = nearest?.title ?: "四六级 / 期末考日程",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            // 5. 工具
+            GlassSectionHeader("工具")
+            GlassListCard {
+                GlassListRow(
+                    icon = Icons.Outlined.CalendarToday,
+                    title = "导出课表为日历 (.ics)",
+                    subtitle = "导入系统日历或手表提醒",
+                    onClick = {
+                        scope.launch {
+                            val lead = if (prefs.classReminderEnabled) prefs.classReminderMinutes else 15
+                            val result = ScheduleIcsExportHelper.exportCurrentSchedule(
+                                scheduleRepo = AppGraph.scheduleRepository,
+                                uiPrefs = AppGraph.uiPrefsStore,
+                                reminderMinutes = lead,
+                            )
+                            if (result == null) {
+                                Toast.makeText(context, "暂无可导出的本地课表，请先同步课表", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val (fileName, ics) = result
+                                pendingIcs = ics
+                                createIcsLauncher.launch(fileName)
+                            }
+                        }
                     },
                 )
             }
-
-            GroupTitle("小组件")
-            EntryCard {
-                Entry(
-                    Icons.Filled.SettingsInputAntenna,
-                    "小组件设置",
-                    "时间 / 地点 / 行样式 · 各桌面组件",
-                    onOpenWidgetSettings,
-                )
-            }
-
-            GroupTitle("系统")
-            EntryCard {
-                // 有新 release 时副标题直接给出结论 + 图标红点；否则留一句"手动检查"的引导。
-                Entry(
-                    Icons.Filled.SystemUpdate,
-                    "检测更新",
-                    if (showDot) {
-                        "发现新版本 v${remoteRelease?.version} · 点击查看"
-                    } else {
-                        "当前 v$currentVersion · 点这里手动检查"
-                    },
-                    { showUpdateDialog = true },
-                    // 版本号 / 有无新版是状态，不是描述
-                    alwaysShowSubtitle = true,
-                    badge = showDot,
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 
-    if (showUpdateDialog) {
-        UpdateCheckDialog(
-            current = currentVersion,
-            onDismiss = { showUpdateDialog = false },
-            onMute = { version ->
-                scope.launch { UpdateCenter.setUpdateMutedVersion(version) }
-            },
+    if (showCountdownSheet) {
+        CountdownManagerSheet(
+            items = countdowns,
+            onSave = { item -> scope.launch { AppGraph.countdownRepository.save(item) } },
+            onDelete = { id -> scope.launch { AppGraph.countdownRepository.delete(id) } },
+            onTogglePin = { item -> scope.launch { AppGraph.countdownRepository.togglePinned(item) } },
+            onDismiss = { showCountdownSheet = false },
         )
     }
 }
 
-@Composable
-private fun GroupTitle(text: String) {
-    // 与卡片的屏幕边距（16dp）对齐；今天/课表页的页边距也是 16dp，全局一个节奏
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 6.dp),
-    )
-}
-
-@Composable
-private fun EntryCard(content: @Composable () -> Unit) {
-    GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Column(content = { content() })
-    }
-}
-
-@Composable
-private fun Entry(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: (() -> Unit)? = null,
-    /** 登录态、版本号这类状态文案：即使关掉「显示描述」也要常显 */
-    alwaysShowSubtitle: Boolean = false,
-    /** 「有新东西」角标：图标右上角一枚小圆点（检测更新用） */
-    badge: Boolean = false,
-) {
-    val enabled = onClick != null
-    // 描述性副标题受开关控制；关掉时整个 supportingContent 为 null，
-    // ListItem 收成单行高度，不是留一块空白。
-    val shownSubtitle = subtitle.takeIf { alwaysShowSubtitle || LocalShowDescriptions.current }
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = if (shownSubtitle != null) {
-            {
-                Text(
-                    shownSubtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        } else {
-            null
-        },
-        leadingContent = {
-            Box {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                )
-                if (badge) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 4.dp, y = (-2).dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.error),
-                    )
-                }
-            }
-        },
-        trailingContent = {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-            )
-        },
-        modifier = if (enabled) Modifier.clickable(onClick = onClick!!) else Modifier,
-    )
-}
-
-/**
- * 「检测更新」弹窗：结果三个分支 —— 有新版 / 已是最新 / 网络不通。
- *
- * 权衡过不做的事：
- *  · 不在 App 内下 APK 再装包 —— 那要 REQUEST_INSTALL_PACKAGES 权限和安装确认流，先做到"跳浏览器"；
- *  · 下载直链优先用 release assets 的 .apk（GitHub CDN），没有或打不开就退 release 页。
- */
-@Composable
-private fun UpdateCheckDialog(
-    current: String,
-    onDismiss: () -> Unit,
-    onMute: (String) -> Unit,
-) {
-    val context = LocalContext.current
-    val release by UpdateCenter.release.collectAsState(initial = null)
-    val phase by UpdateCenter.phase.collectAsState(initial = UpdateCenter.Phase.Idle)
-
-    // 弹窗判断不受「不再提醒」影响：进来了就把当前最新版说完，红点是否还亮由入口条自己管。
-    val hasNew = AppUpdate.shouldShowDot(current, release?.version, muted = null)
-
-    fun open(url: String) {
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.onFailure {
-            Toast.makeText(context, "没有找到可用的浏览器", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                when {
-                    hasNew -> "发现新版本"
-                    phase == UpdateCenter.Phase.Checking -> "正在检查更新"
-                    else -> "检测更新"
-                },
-            )
-        },
-        text = {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                when {
-                    hasNew && release != null -> {
-                        val r = release!!
-                        Text(
-                            text = "当前 v$current → 最新 v${r.version}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = r.notes.takeIf { it.isNotBlank() }
-                                ?: "（这次 release 没写更新说明）",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        DescriptionText("下载需能访问 GitHub")
-                        Spacer(Modifier.height(120.dp))
-                    }
-
-                    phase == UpdateCenter.Phase.Checking -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                            Text("正在连接 GitHub……", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Spacer(Modifier.height(24.dp))
-                    }
-
-                    release != null -> {
-                        // 查到了但不是更新（比当前版本旧/等）
-                        Text(
-                            "当前已是最新版本 v$current",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Spacer(Modifier.height(24.dp))
-                    }
-
-                    else -> {
-                        Text(
-                            text = if (phase == UpdateCenter.Phase.Done) {
-                                "连不上 GitHub"
-                            } else {
-                                "点「检查更新」检查一次"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (phase == UpdateCenter.Phase.Done) {
-                            DescriptionText("校园网可能拦截，可换移动数据再试")
-                        }
-                        Spacer(Modifier.height(24.dp))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (hasNew && release != null) {
-                TextButton(onClick = { open(release!!.downloadUrl ?: release!!.pageUrl) }) {
-                    Text("去下载")
-                }
-            } else {
-                TextButton(
-                    onClick = { UpdateCenter.checkExplicit() },
-                    enabled = phase != UpdateCenter.Phase.Checking,
-                ) {
-                    Text(if (phase == UpdateCenter.Phase.Checking) "检查中…" else "检查更新")
-                }
-            }
-        },
-        dismissButton = {
-            if (hasNew && release != null) {
-                Row {
-                    TextButton(onClick = {
-                        onMute(release!!.version)
-                        onDismiss()
-                    }) {
-                        Text("不再提醒此版本")
-                    }
-                    TextButton(onClick = onDismiss) {
-                        Text("关闭")
-                    }
-                }
-            } else {
-                TextButton(onClick = onDismiss) {
-                    Text("关闭")
-                }
-            }
-        },
-    )
-}
+private fun formatCampusNum(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else String.format(Locale.US, "%.2f", v)

@@ -51,7 +51,11 @@ object TodayTimeline {
     const val MIN_GAP_MIN = 15
 
     /** 将课表显示分段转为时间轴，避免首页另选一门课或丢失按周设置。 */
-    fun courseEntries(blocks: List<ScheduleBlock>, periods: List<Period>): List<TimelineEntry> {
+    fun courseEntries(
+        blocks: List<ScheduleBlock>,
+        periods: List<Period>,
+        shortenNames: Boolean = false,
+    ): List<TimelineEntry> {
         val visible = mutableListOf<ScheduleBlock>()
         blocks.sortedWith(compareBy({ it.semesterId }, { it.weekIndex }, { it.weekday }, { it.startUnit })).forEach { block ->
             val previous = visible.lastOrNull()
@@ -76,7 +80,11 @@ object TodayTimeline {
                 kind = TimelineKind.COURSE,
                 startMin = start,
                 endMin = end,
-                title = if (block.showPlaceholder) "课程冲突" else session.courseName,
+                title = if (block.showPlaceholder) {
+                    "课程冲突"
+                } else {
+                    com.zzupocket.app.core.CourseShortener.shorten(session.courseName, shortenNames)
+                },
                 subtitle = if (block.showPlaceholder) names.joinToString(" / ")
                     else ScheduleText.tidyPlace(session.roomText ?: session.campusText).orEmpty(),
                 colorArgb = if (block.showPlaceholder) null else PlanColor.of(session.color)?.argb,

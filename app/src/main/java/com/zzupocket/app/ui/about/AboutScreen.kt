@@ -9,22 +9,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import com.zzupocket.app.ui.components.GlassCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.zzupocket.app.BuildConfig
+import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
 
 /** ⚠️ 发布前把这里改成你自己的仓库地址 */
 private const val REPO_URL = "https://github.com/3beuml/ZZUPocket"
@@ -44,13 +43,13 @@ fun AboutScreen(onBack: () -> Unit) {
     val uriHandler = LocalUriHandler.current
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("关于") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
             )
         },
@@ -63,14 +62,11 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Card(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("ZZUPocket", style = MaterialTheme.typography.titleMedium)
+                    Text("阳光郑好", style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = "把学校分散的网页系统（课表、教室占用、电费、校园卡、图书馆座位）" +
                             "整理成一个原生 Android App。",

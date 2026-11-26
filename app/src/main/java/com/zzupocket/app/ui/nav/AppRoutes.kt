@@ -3,27 +3,31 @@ package com.zzupocket.app.ui.nav
 /**
  * 导航路由的**唯一来源**。
  *
- * 为什么要单独立一个：桌面小组件点进来时要指定"落到哪一页"（点电量去电费页、点余额去校园卡页），
- * 而那些路由字符串原本是 `AppNav.kt` 里的 private 常量。如果组件那边自己写一遍字面量，
- * 两边迟早会写歪（改名时只改一处、另一处静默失效）。所以放在这里，两边都引它。
+ * 桌面小组件、课前通知、系统设置跳转均统一从这里引用路由常量，避免多处字面量写歪。
  */
 object AppRoutes {
 
-    /** 底部导航的 tab */
+    /** 底部四栏 Dock Tab */
     const val TODAY = "today"
     const val SCHEDULE = "schedule"
-    const val FOCUS = "focus"
     const val CAMPUS = "campus"
+    const val RADAR = "radar"
 
-    /** 「更多」里的子页（不是 tab，进去之后底部导航栏会隐藏） */
+    /** 二级功能页（全屏栈内页，自动隐藏底部 Dock） */
+    const val FOCUS = "focus"
+    const val SETTINGS = "settings"
+    const val ARTICLE_DETAIL = "article_detail"
     const val ELECTRICITY = "electricity"
     const val CARD = "campus_card"
+    const val GRADES = "academic_grades"
+    const val EXAMS = "academic_exams"
+    const val STUDENT_STATUS = "student_status"
+    const val TRAINING_PLAN = "training_plan"
 
     /**
-     * 小组件带过来的路由 extra。
+     * 小组件或通知带过来的路由 extra。
      *
-     * MainActivity 读到它之后会**把它从 Intent 里删掉**：不删的话，转屏、切深色模式
-     * 这类 Activity 重建会再次执行跳转，用户正看着明细时会被莫名弹回去。
+     * MainActivity 读到后立即清掉，防止旋转屏幕/深浅色切换重复跳转。
      */
     const val EXTRA_ROUTE = "com.zzupocket.app.extra.ROUTE"
 }

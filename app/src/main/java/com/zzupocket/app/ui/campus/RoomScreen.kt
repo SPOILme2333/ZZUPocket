@@ -53,6 +53,7 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -80,7 +82,10 @@ import com.zzupocket.app.domain.Period
 import com.zzupocket.app.domain.RoomRow
 import com.zzupocket.app.ui.components.DescriptionText
 import com.zzupocket.app.ui.components.HintText
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
 import com.zzupocket.app.ui.components.RelativeTime
+import com.zzupocket.app.ui.components.liquidGlassDialogContainerColor
+import com.zzupocket.app.ui.components.liquidGlassSheetContainerColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -184,13 +189,13 @@ fun RoomScreen(
     LaunchedEffect(shouldLoadMore) { if (shouldLoadMore) vm.loadMore() }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("教室占用") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = vm::refresh) {
@@ -395,6 +400,7 @@ fun RoomScreen(
 private fun RawRoomDialog(room: RoomRow, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("接口原始字段") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -650,7 +656,10 @@ private fun FilterSheet(
 ) {
     var picked by remember(selected, buildings) { mutableStateOf(selected) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = liquidGlassSheetContainerColor(),
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()

@@ -61,6 +61,8 @@ class TodayModulesTest {
                 TodayModules.TODAY_MODULE_TIMELINE,
                 TodayModules.TODAY_MODULE_CARD,
                 TodayModules.TODAY_MODULE_ELECTRICITY,
+                TodayModules.TODAY_MODULE_FOCUS,
+                TodayModules.TODAY_MODULE_COUNTDOWN,
                 TodayModules.TODAY_MODULE_SCHEDULE,
                 TodayModules.TODAY_MODULE_LIBRARY,
                 TodayModules.TODAY_MODULE_ROOMS,

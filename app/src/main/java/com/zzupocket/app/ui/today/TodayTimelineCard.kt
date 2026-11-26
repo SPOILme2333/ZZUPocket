@@ -1,5 +1,13 @@
 ﻿package com.zzupocket.app.ui.today
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -17,31 +25,34 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzupocket.app.core.AppGraph
-import com.zzupocket.app.ui.components.GlassCard
 import com.zzupocket.app.core.ScheduleText
 import com.zzupocket.app.data.repo.ScheduleRepository
 import com.zzupocket.app.data.repo.TodayTimetable
@@ -49,9 +60,13 @@ import com.zzupocket.app.domain.FocusStats
 import com.zzupocket.app.domain.Phase
 import com.zzupocket.app.domain.PlanColor
 import com.zzupocket.app.domain.Session
+import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.glassClickable
+import com.zzupocket.app.ui.theme.tabularNumbers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
@@ -123,7 +138,13 @@ class TodayTimelineViewModel(
             .groupBy { it.contextRef }
             .mapValues { (_, list) -> list.sumOf { it.actualSeconds } }
 
-        val courseEntries = TodayTimeline.courseEntries(TodayTimetable.displayBlocks(scheduleRepo, sessions), periods)
+        val uiPrefs = runCatching { AppGraph.uiPrefsStore.flow.first() }.getOrNull()
+        val shortenNames = uiPrefs?.smartShortCourseName ?: false
+        val courseEntries = TodayTimeline.courseEntries(
+            blocks = TodayTimetable.displayBlocks(scheduleRepo, sessions),
+            periods = periods,
+            shortenNames = shortenNames,
+        )
         val customEntries = sessions
             .filter { it.source == ScheduleRepository.SOURCE_CUSTOM }
             .mapNotNull { session -> courseEntry(session, periods, null, focusByRef) }
@@ -136,7 +157,11 @@ class TodayTimelineViewModel(
         // 明天的课概览：没课的空态给"明天第一节"，有课的日子给"明天 N 节"脚注
         val tomorrowEntries = runCatching {
             val tomorrow = TodayTimetable.sessionsOn(scheduleRepo, AppGraph.uiPrefsStore, today.plusDays(1))
-            TodayTimeline.courseEntries(TodayTimetable.displayBlocks(scheduleRepo, tomorrow), periods)
+            TodayTimeline.courseEntries(
+                blocks = TodayTimetable.displayBlocks(scheduleRepo, tomorrow),
+                periods = periods,
+                shortenNames = shortenNames,
+            )
         }.getOrDefault(emptyList())
         val tomorrowHint = if (courseEntries.isEmpty()) {
             tomorrowEntries.firstOrNull()
@@ -229,59 +254,28 @@ fun TodayTimelineCard(
     state: TodayTimelineUi,
     onOpenSchedule: () -> Unit,
     modifier: Modifier = Modifier,
+    @Suppress("UNUSED_PARAMETER")
+    showStatusHint: Boolean = true,
 ) {
     GlassCard(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onOpenSchedule),
+        modifier = modifier.fillMaxWidth(),
+        onClick = onOpenSchedule,
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.CalendarMonth,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("今天", style = MaterialTheme.typography.titleMedium)
-                state.week?.let {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "第 $it 周",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text("课程", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
-                if (state.dateText.isNotEmpty()) {
-                    Text(
-                        text = state.dateText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "课表",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(2.dp))
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.outline,
-                )
-            }
-
-            if (state.focusSeconds > 0) {
-                Text(
-                    text = buildString {
-                        append("今日专注 ${FocusStats.humanDuration(state.focusSeconds)}")
-                        if (state.focusCount > 0) append(" · ${state.focusCount} 个番茄")
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            state.nextHint?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
                 )
             }
 
@@ -305,19 +299,18 @@ fun TodayTimelineCard(
                     )
                 }
             } else {
-                HorizontalDivider(Modifier.padding(top = 2.dp))
                 TimelineList(state)
                 state.tomorrowFirst?.let { first ->
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 6.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    )
                     Text(
                         text = "明天第一节",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
-                    // 明天的课永远不该被判成「进行中」：传一个比任何时刻都大的值，
-                    // covers() 恒为 false。写 Int.MAX_VALUE 是为了让意图自解释，
-                    // 而不是靠 1441 这种"一天有 1440 分钟"的隐式约定。
+                    Spacer(Modifier.height(4.dp))
                     TimelineRow(entry = first, nowMin = Int.MAX_VALUE)
                 }
             }
@@ -328,34 +321,120 @@ fun TodayTimelineCard(
 @Composable
 private fun TimelineList(state: TodayTimelineUi) {
     val entries = state.entries
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+    val pastEntries = remember(entries, state.nowMin) {
+        entries.filter { it.endMin <= state.nowMin }
+    }
+    val activeAndUpcoming = remember(entries, state.nowMin) {
+        entries.filter { it.endMin > state.nowMin }
+    }
+    // 只有当已结束条数 + 总数超过 2 条时才默认收拢，保持首页如原版般短小紧凑
+    val shouldCollapsePast = pastEntries.isNotEmpty() && entries.size > 2
+    var showPast by remember { mutableStateOf(false) }
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (showPast) 180f else 0f,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "todayTimelineArrowRotation",
+    )
+
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        if (shouldCollapsePast) {
+            val pastCourses = pastEntries.count { it.kind == TimelineKind.COURSE }
+            val pastFocus = pastEntries.count { it.kind == TimelineKind.FOCUS }
+            val summaryText = buildList {
+                if (pastCourses > 0) add("${pastCourses} 节课")
+                if (pastFocus > 0) add("专注 ${pastFocus} 轮")
+            }.joinToString(" · ")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .glassClickable(onClick = { showPast = !showPast })
+                    .padding(vertical = 5.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "已结束 $summaryText",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (showPast) "收起" else "展开",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = arrowRotation },
+                )
+            }
+            AnimatedVisibility(
+                visible = showPast,
+                enter = expandVertically(
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    expandFrom = Alignment.Top,
+                ) + fadeIn(animationSpec = tween(160, delayMillis = 40)),
+                exit = shrinkVertically(
+                    animationSpec = tween(180, easing = FastOutSlowInEasing),
+                    shrinkTowards = Alignment.Top,
+                ) + fadeOut(animationSpec = tween(90)),
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    pastEntries.forEach { entry ->
+                        TimelineRow(entry = entry, nowMin = state.nowMin)
+                    }
+                }
+            }
+        }
+
+        val visibleList = if (shouldCollapsePast) activeAndUpcoming else entries
         var nowPlaced = false
-        entries.forEach { entry ->
+        visibleList.forEach { entry ->
             if (!nowPlaced && entry.startMin > state.nowMin) {
                 NowRow(state.nowMin)
                 nowPlaced = true
             }
             TimelineRow(entry = entry, nowMin = state.nowMin)
         }
-        if (!nowPlaced) NowRow(state.nowMin)
+        if (!nowPlaced && (activeAndUpcoming.isNotEmpty() || !shouldCollapsePast)) {
+            NowRow(state.nowMin)
+        }
     }
 }
 
-/** 「现在 HH:mm」那条线 */
+/** 当前时刻横线指示行（纯细线 + 枣红时刻点，去除冗余文字） */
 @Composable
 private fun NowRow(nowMin: Int) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             text = TodayTimeline.clock(nowMin),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.labelSmall.tabularNumbers(),
+            color = MaterialTheme.colorScheme.tertiary,
+            textAlign = TextAlign.End,
             modifier = Modifier.width(48.dp),
         )
-        Spacer(Modifier.width(24.dp))
-        Text(
-            text = "现在",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.error,
+        Spacer(Modifier.width(8.dp))
+        Box(modifier = Modifier.width(16.dp), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.75.dp)
+                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
         )
     }
 }
@@ -364,14 +443,12 @@ private fun NowRow(nowMin: Int) {
 private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
     val ongoing = entry.covers(nowMin)
     val railColor = MaterialTheme.colorScheme.outlineVariant
-    val dotColor = when (entry.kind) {
-        TimelineKind.COURSE -> if (entry.hasUnresolvedConflict) MaterialTheme.colorScheme.error
-            else entry.colorArgb?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
-        TimelineKind.FOCUS -> MaterialTheme.colorScheme.tertiary
-        TimelineKind.GAP -> MaterialTheme.colorScheme.surfaceVariant
+    val dotColor = when {
+        entry.hasUnresolvedConflict -> MaterialTheme.colorScheme.error
+        ongoing -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
     }
     val titleColor = when {
-        ongoing -> MaterialTheme.colorScheme.primary
         entry.kind == TimelineKind.GAP -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -384,13 +461,13 @@ private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
         ) {
             Text(
                 text = TodayTimeline.clock(entry.startMin),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium.tabularNumbers(),
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = TodayTimeline.clock(entry.endMin),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
+                style = MaterialTheme.typography.labelSmall.tabularNumbers(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(Modifier.width(8.dp))
@@ -399,27 +476,45 @@ private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
             Box(
                 Modifier
                     .align(Alignment.TopCenter)
-                    .width(2.dp)
+                    .width(1.dp)
                     .fillMaxHeight()
                     .background(railColor),
             )
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = 6.dp)
-                    .size(if (ongoing) 10.dp else 8.dp)
-                    .clip(CircleShape)
-                    .background(dotColor),
-            )
+            if (ongoing) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = 4.dp)
+                        .size(15.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                }
+            } else {
+                Box(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = 7.dp)
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(dotColor),
+                )
+            }
         }
         Spacer(Modifier.width(8.dp))
         // 右：内容
         Column(
-            modifier = Modifier.weight(1f).padding(bottom = 12.dp),
+            modifier = Modifier.weight(1f).padding(bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
             if (entry.hasUnresolvedConflict) {
-                // 复用课表的警示色；图标、浅底与边框使它区别于轴上的红色「现在」。
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
                     contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -438,7 +533,7 @@ private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
                         Text(entry.subtitle, style = MaterialTheme.typography.bodySmall,
                             maxLines = 3, overflow = TextOverflow.Ellipsis)
                         Text("点按查看课表", style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                            fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
                     }
                 }
             } else {
@@ -446,7 +541,7 @@ private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
                     Text(
                         text = entryTitle(entry),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (entry.kind == TimelineKind.GAP) FontWeight.Normal else FontWeight.Medium,
+                        fontWeight = if (ongoing) FontWeight.Bold else FontWeight.Normal,
                         color = titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -456,7 +551,7 @@ private fun TimelineRow(entry: TimelineEntry, nowMin: Int) {
                         Text(
                             text = "进行中",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.tertiary,
                         )
                     }
                 }

@@ -124,6 +124,11 @@ class NoxGatewayClient(private val store: TokenStore) {
         return restoreTrustInternal(portalUrl, ignoreCooldown = true)
     }
 
+    /** 用户重新登录成功后重置失败冷却窗口，避免旧冷却阻断新一轮无感网关认证 */
+    fun resetCooldown() {
+        cooldownUntil = 0L
+    }
+
     /**
      * 教务请求被拦时的入口。[portalUrl] 是 302 Location 里的认证门户地址
      * （含 app_uuid/redirect_url，由调用方透传）。返回 true = 已恢复信任，

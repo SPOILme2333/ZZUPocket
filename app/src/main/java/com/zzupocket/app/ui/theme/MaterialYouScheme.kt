@@ -36,6 +36,112 @@ object MaterialYouScheme {
     /** 默认对比度（系统默认档） */
     const val DEFAULT_CONTRAST = 0.0
 
+    /** 郑州大学校徽标准墨青（外环与 Z 字主色） */
+    const val ZZU_EMBLEM_TEAL_ARGB: Int = 0xFF223C3B.toInt()
+
+    /** 郑州大学校徽标准深红（中央 A 字枣红主色） */
+    const val ZZU_EMBLEM_RED_ARGB: Int = 0xFF730917.toInt()
+
+    /**
+     * 生成郑州大学校徽专属双色主题（墨青 `#223C3B` × 枣红 `#730917`）。
+     *
+     * 默认标准对比度下直接锚定校徽真实色值并确保高对比度；高对比度档由 MCU 算法自动拉高对比。
+     */
+    fun zzuEmblemScheme(
+        dark: Boolean,
+        variant: SchemeVariant = SchemeVariant.TONAL_SPOT,
+        contrastLevel: Double = DEFAULT_CONTRAST,
+    ): ColorScheme {
+        val base = fromSeed(
+            seedArgb = ZZU_EMBLEM_TEAL_ARGB,
+            dark = dark,
+            variant = variant,
+            contrastLevel = contrastLevel,
+        )
+        val redAccent = fromSeed(
+            seedArgb = ZZU_EMBLEM_RED_ARGB,
+            dark = dark,
+            variant = variant,
+            contrastLevel = contrastLevel,
+        )
+        val merged = base.copy(
+            tertiary = redAccent.primary,
+            onTertiary = redAccent.onPrimary,
+            tertiaryContainer = redAccent.primaryContainer,
+            onTertiaryContainer = redAccent.onPrimaryContainer,
+        )
+        if (contrastLevel != DEFAULT_CONTRAST) {
+            return merged.copy(
+                error = redAccent.primary,
+                onError = redAccent.onPrimary,
+                errorContainer = redAccent.primaryContainer,
+                onErrorContainer = redAccent.onPrimaryContainer,
+            )
+        }
+        return if (dark) {
+            merged.copy(
+                primary = Color(0xFFA9C9C5),
+                onPrimary = Color(0xFF0F2422),
+                primaryContainer = Color(0xFF2A4644),
+                onPrimaryContainer = Color(0xFFD2E6E3),
+                secondary = Color(0xFFB3C6C3),
+                secondaryContainer = Color(0xFF33403E),
+                tertiary = Color(0xFFD4656F),
+                onTertiary = Color(0xFF3B0309),
+                tertiaryContainer = Color(0xFF5A0F19),
+                onTertiaryContainer = Color(0xFFF6D9DC),
+                error = Color(0xFFD4656F),
+                onError = Color(0xFF3B0309),
+                errorContainer = Color(0xFF5A0F19),
+                onErrorContainer = Color(0xFFF6D9DC),
+                background = Color(0xFF0D1312),
+                onBackground = Color(0xFFE4EAE9),
+                surface = Color(0xFF0D1312),
+                onSurface = Color(0xFFE4EAE9),
+                surfaceVariant = Color(0xFF222B2A),
+                onSurfaceVariant = Color(0xFFA1ACAA),
+                outline = Color(0xFF6E7977),
+                outlineVariant = Color(0xFF2C3534),
+                surfaceContainerLow = Color(0xFF121918),
+                surfaceContainer = Color(0xFF161D1C),
+                surfaceContainerHigh = Color(0xFF1C2423),
+                surfaceContainerHighest = Color(0xFF222B2A),
+            )
+        } else {
+            merged.copy(
+                primary = Color(0xFF223C3B),
+                onPrimary = Color.White,
+                primaryContainer = Color(0xFFDDE6E4),
+                onPrimaryContainer = Color(0xFF142826),
+                secondary = Color(0xFF4E6361),
+                onSecondary = Color.White,
+                secondaryContainer = Color(0xFFE3EAE8),
+                onSecondaryContainer = Color(0xFF1A2725),
+                tertiary = Color(0xFF730917),
+                onTertiary = Color.White,
+                tertiaryContainer = Color(0xFFF3E3E4),
+                onTertiaryContainer = Color(0xFF4A0610),
+                error = Color(0xFF730917),
+                onError = Color.White,
+                errorContainer = Color(0xFFF3E3E4),
+                onErrorContainer = Color(0xFF4A0610),
+                background = Color(0xFFF4F5F2),
+                onBackground = Color(0xFF141A19),
+                surface = Color(0xFFF4F5F2),
+                onSurface = Color(0xFF141A19),
+                surfaceVariant = Color(0xFFE6EAE8),
+                onSurfaceVariant = Color(0xFF5A6462),
+                outline = Color(0xFF8C9593),
+                outlineVariant = Color(0xFFD5DAD8),
+                surfaceContainerLowest = Color.White,
+                surfaceContainerLow = Color(0xFFEEF0ED),
+                surfaceContainer = Color(0xFFE9ECE9),
+                surfaceContainerHigh = Color(0xFFE3E7E4),
+                surfaceContainerHighest = Color(0xFFDDE2DF),
+            )
+        }
+    }
+
     /** 外观页「深色对比度」档位 → MCU contrastLevel（对标系统对比度三档的映射） */
     fun darkContrastLevel(darkContrast: DarkContrast): Double = when (darkContrast) {
         DarkContrast.STANDARD -> 0.0

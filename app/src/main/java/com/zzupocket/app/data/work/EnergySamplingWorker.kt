@@ -35,9 +35,14 @@ class EnergySamplingWorker(
         // 用户还没设置自己的宿舍房间就别采了（早期版本会回落到开发者自己的房间号）
         if (lightRoom.isBlank() && acRoom.isBlank()) return Result.success()
         return try {
-            AppGraph.electricityRepository.refreshAll(
+            val snapshot = AppGraph.electricityRepository.refreshAll(
                 lightRoomId = lightRoom,
                 acRoomId = acRoom,
+            )
+            com.zzupocket.app.notify.EnergyAlertNotifier.evaluateAndNotify(
+                context = applicationContext,
+                uiPrefs = AppGraph.uiPrefsStore,
+                snapshot = snapshot,
             )
             Result.success()
         } catch (e: Throwable) {

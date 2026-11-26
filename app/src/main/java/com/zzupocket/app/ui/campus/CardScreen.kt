@@ -35,12 +35,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import com.zzupocket.app.ui.components.DescriptionText
 import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.components.LiquidGlassOutlinedButton
+import com.zzupocket.app.ui.components.liquidGlassSheetContainerColor
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -74,13 +79,13 @@ fun CardScreen(
     val rows = vm.filtered()
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("校园卡") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = vm::refresh) {
@@ -232,7 +237,7 @@ fun CardScreen(
                             color = MaterialTheme.colorScheme.tertiary,
                         )
                     }
-                    OutlinedButton(onClick = vm::openFilterSheet) { Text("筛选") }
+                    LiquidGlassOutlinedButton(onClick = vm::openFilterSheet) { Text("筛选") }
                 }
             }
 
@@ -293,7 +298,10 @@ fun CardScreen(
     }
 
     state.detail?.let { record ->
-        ModalBottomSheet(onDismissRequest = vm::closeDetail) {
+        ModalBottomSheet(
+            onDismissRequest = vm::closeDetail,
+            containerColor = liquidGlassSheetContainerColor(),
+        ) {
             TransactionDetail(record)
         }
     }
@@ -349,7 +357,10 @@ private fun FilterSheet(
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = liquidGlassSheetContainerColor(),
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()

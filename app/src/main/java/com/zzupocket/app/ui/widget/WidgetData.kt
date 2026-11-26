@@ -151,6 +151,7 @@ object WidgetData {
                     timeAsPeriod = prefs.widgetTimeAsPeriod,
                     hidePlace = !prefs.widgetShowPlace,
                     hideTime = !prefs.widgetShowTime,
+                    shortenNames = prefs.smartShortCourseName,
                 )
             }
             .sortedBy { it.startMin }
@@ -164,6 +165,7 @@ object WidgetData {
                     timeAsPeriod = prefs.widgetTimeAsPeriod,
                     hidePlace = !prefs.widgetShowPlace,
                     hideTime = !prefs.widgetShowTime,
+                    shortenNames = prefs.smartShortCourseName,
                 )
             }
             .sortedBy { it.startMin }
@@ -231,6 +233,7 @@ object WidgetData {
                         // 周课表格子里的地点/时刻有独立开关
                         hidePlace = !prefs.widgetWeekShowPlace,
                         hideTime = !prefs.widgetWeekShowTime,
+                        shortenNames = prefs.smartShortCourseName,
                     )
                 }
                 .sortedBy { it.startUnit }

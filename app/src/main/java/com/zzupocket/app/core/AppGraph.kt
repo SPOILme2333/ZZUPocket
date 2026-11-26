@@ -166,7 +166,12 @@ object AppGraph {
     val db: AppDatabase by lazy { AppDatabase.get(appContext) }
 
     val authRepository: AuthRepository by lazy {
-        AuthRepository(tokenStore, casClient, ecardClient)
+        AuthRepository(
+            store = tokenStore,
+            cas = casClient,
+            ecard = ecardClient,
+            onLoginSuccess = { noxGateway.resetCooldown() },
+        )
     }
 
     val electricityRepository: ElectricityRepository by lazy {
@@ -221,5 +226,31 @@ object AppGraph {
 
     val roomRepository: RoomRepository by lazy {
         RoomRepository(easClient, authRepository, db)
+    }
+
+    val countdownRepository: com.zzupocket.app.data.repo.CountdownRepository by lazy {
+        com.zzupocket.app.data.repo.CountdownRepository(db)
+    }
+
+    val aiSummaryClient: com.zzupocket.app.data.news.AiSummaryClient by lazy {
+        com.zzupocket.app.data.news.AiSummaryClient(HttpClients.publicWeb, json)
+    }
+
+    val newsRepository: com.zzupocket.app.data.news.NewsRepository by lazy {
+        com.zzupocket.app.data.news.NewsRepository(db, HttpClients.publicWeb, aiSummaryClient, json)
+    }
+
+    val classReminderScheduler: com.zzupocket.app.notify.ClassReminderScheduler by lazy {
+        com.zzupocket.app.notify.ClassReminderScheduler(appContext, scheduleRepository, uiPrefsStore)
+    }
+
+    val academicRepository: com.zzupocket.app.data.repo.AcademicRepository by lazy {
+        com.zzupocket.app.data.repo.AcademicRepository(
+            db = db,
+            eas = easClient,
+            auth = authRepository,
+            json = json,
+            countdownRepo = countdownRepository,
+        )
     }
 }

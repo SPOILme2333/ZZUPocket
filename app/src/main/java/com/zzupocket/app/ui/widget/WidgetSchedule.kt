@@ -214,6 +214,7 @@ object WidgetSchedule {
         timeAsPeriod: Boolean = false,
         hidePlace: Boolean = false,
         hideTime: Boolean = false,
+        shortenNames: Boolean = false,
     ): WidgetCourse? {
         val startPeriod = periods.firstOrNull { it.indexNo == session.startUnit }
         val endPeriod = periods.firstOrNull { it.indexNo == session.endUnit }
@@ -221,7 +222,7 @@ object WidgetSchedule {
         val end = minuteOf(endPeriod?.endText ?: session.endTime) ?: (start + 45)
         return WidgetCourse(
             code = session.courseCode,
-            name = session.courseName,
+            name = com.zzupocket.app.core.CourseShortener.shorten(session.courseName, shortenNames),
             // 教务给的 "南2 南2_206" 收拾成 "南2 206"（与 App 课表格子同一套口径）
             place = ScheduleText.tidyPlace(session.roomText ?: session.campusText).orEmpty(),
             startMin = start,

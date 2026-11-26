@@ -7,28 +7,29 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.ui.components.DescriptionText
+import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.components.LiquidGlassChip
 import com.zzupocket.app.ui.widget.WidgetSchedule
 import com.zzupocket.app.ui.widget.Widgets
 import kotlinx.coroutines.launch
@@ -45,7 +46,7 @@ import kotlinx.coroutines.launch
 fun WidgetSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = UiPrefs())
+    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = AppGraph.uiPrefsStore.latest)
 
     fun set(block: suspend () -> Unit) {
         scope.launch {
@@ -55,13 +56,13 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("小组件设置") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
             )
         },
@@ -77,21 +78,22 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
             GroupTitle("通用")
             SettingsCard {
                 ListItem(
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text("时间显示方式") },
                     supportingContent = {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.padding(top = 6.dp),
                         ) {
-                            FilterChip(
+                            LiquidGlassChip(
+                                label = "时刻",
                                 selected = !prefs.widgetTimeAsPeriod,
                                 onClick = { set { AppGraph.uiPrefsStore.setWidgetTimeAsPeriod(false) } },
-                                label = { Text("时刻") },
                             )
-                            FilterChip(
+                            LiquidGlassChip(
+                                label = "节次",
                                 selected = prefs.widgetTimeAsPeriod,
                                 onClick = { set { AppGraph.uiPrefsStore.setWidgetTimeAsPeriod(true) } },
-                                label = { Text("节次") },
                             )
                         }
                     },
@@ -113,6 +115,7 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
             GroupTitle("2×2 下一节课")
             SettingsCard {
                 ListItem(
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text("行样式") },
                     supportingContent = {
                         Row(
@@ -125,10 +128,10 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                                 WidgetSchedule.ROW_MODE_COMPACT to "紧凑",
                                 WidgetSchedule.ROW_MODE_MINI to "单行",
                             ).forEach { (value, label) ->
-                                FilterChip(
+                                LiquidGlassChip(
+                                    label = label,
                                     selected = prefs.widgetRowMode == value,
                                     onClick = { set { AppGraph.uiPrefsStore.setWidgetRowMode(value) } },
-                                    label = { Text(label) },
                                 )
                             }
                         }
@@ -140,6 +143,7 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                         "紧凑 = 小字号三行（课名/地点/时间各一行）；单行 = 课名 + 时间，最省高度",
                 )
                 ListItem(
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text("字号") },
                     supportingContent = {
                         Row(
@@ -153,16 +157,17 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                                 WidgetSchedule.NEXT_CLASS_COMPACT_TIERS[2].label to "标准",
                                 WidgetSchedule.NEXT_CLASS_COMPACT_TIERS[3].label to "矮盒",
                             ).forEach { (value, label) ->
-                                FilterChip(
+                                LiquidGlassChip(
+                                    label = label,
                                     selected = prefs.widgetFontTier == value,
                                     onClick = { set { AppGraph.uiPrefsStore.setWidgetFontTier(value) } },
-                                    label = { Text(label) },
                                 )
                             }
                         }
                     },
                 )
                 ListItem(
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text("表头") },
                     supportingContent = {
                         Row(
@@ -173,10 +178,10 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                                 WidgetSchedule.HEADER_CLASSIC to "经典",
                                 WidgetSchedule.HEADER_COMPACT to "紧凑",
                             ).forEach { (value, label) ->
-                                FilterChip(
+                                LiquidGlassChip(
+                                    label = label,
                                     selected = prefs.widgetHeaderStyle == value,
                                     onClick = { set { AppGraph.uiPrefsStore.setWidgetHeaderStyle(value) } },
-                                    label = { Text(label) },
                                 )
                             }
                         }
@@ -192,6 +197,7 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
             GroupTitle("4×2 今明课表")
             SettingsCard {
                 ListItem(
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text("行样式") },
                     supportingContent = {
                         Row(
@@ -203,10 +209,10 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                                 WidgetSchedule.ROW_MODE_STACKED to "竖排",
                                 WidgetSchedule.ROW_MODE_MINI to "单行",
                             ).forEach { (value, label) ->
-                                FilterChip(
+                                LiquidGlassChip(
+                                    label = label,
                                     selected = prefs.widgetTwoDayStyle == value,
                                     onClick = { set { AppGraph.uiPrefsStore.setWidgetTwoDayStyle(value) } },
-                                    label = { Text(label) },
                                 )
                             }
                         }
@@ -246,10 +252,7 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
 
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {
-    androidx.compose.material3.Card(
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+    GlassCard(
         modifier = Modifier.fillMaxSize(),
     ) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) { content() }
@@ -264,6 +267,7 @@ private fun DescriptionItem(
     onChange: (Boolean) -> Unit,
 ) {
     ListItem(
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         headlineContent = { Text(title) },
         supportingContent = { DescriptionText(description) },
         trailingContent = {

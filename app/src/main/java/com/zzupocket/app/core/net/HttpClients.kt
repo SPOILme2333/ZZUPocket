@@ -112,4 +112,14 @@ object HttpClients {
     val lib: OkHttpClient by lazy {
         builder(minIntervalMs = 300).followRedirects(false).build()
     }
+
+    /** 学校官网公开资讯与用户自选 AI 接口客户端（允许 HTTPS 重定向） */
+    val publicWeb: OkHttpClient by lazy {
+        builder(minIntervalMs = 150)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(35, TimeUnit.SECONDS)
+            .build()
+    }
 }

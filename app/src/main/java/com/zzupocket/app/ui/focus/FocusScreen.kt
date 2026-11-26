@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -54,6 +55,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +80,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zzupocket.app.data.db.FocusTagEntity
 import com.zzupocket.app.data.prefs.TimerPreset
 import com.zzupocket.app.domain.FocusRecord
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.components.LiquidGlassButton
+import com.zzupocket.app.ui.components.LiquidGlassChip
+import com.zzupocket.app.ui.components.LiquidGlassIconButton
+import com.zzupocket.app.ui.components.LiquidGlassOutlinedButton
+import com.zzupocket.app.ui.components.liquidGlassDialogContainerColor
 import com.zzupocket.app.ui.nav.DOCK_CLEARANCE
 import com.zzupocket.app.domain.FocusStats
 import com.zzupocket.app.domain.Phase
@@ -88,6 +97,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun FocusScreen(
+    onBack: (() -> Unit)? = null,
     onOpenStats: () -> Unit = {},
     vm: FocusViewModel = viewModel(),
 ) {
@@ -114,16 +124,29 @@ fun FocusScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("专注") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                navigationIcon = {
+                    if (onBack != null) {
+                        LiquidGlassBackButton(onClick = onBack)
+                    }
+                },
                 actions = {
-                    IconButton(onClick = onOpenStats) {
-                        Icon(Icons.Filled.Insights, contentDescription = "学习统计")
-                    }
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Filled.Tune, contentDescription = "计时设置")
-                    }
+                    LiquidGlassIconButton(
+                        icon = Icons.Filled.Insights,
+                        contentDescription = "学习统计",
+                        onClick = onOpenStats,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    LiquidGlassIconButton(
+                        icon = Icons.Filled.Tune,
+                        contentDescription = "计时设置",
+                        onClick = { showSettings = true },
+                    )
+                    Spacer(Modifier.width(8.dp))
                 },
             )
         },
@@ -295,7 +318,7 @@ private fun Controls(ui: FocusUiState, vm: FocusViewModel) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
+        LiquidGlassButton(
             onClick = {
                 when {
                     idle -> vm.start()
@@ -314,7 +337,7 @@ private fun Controls(ui: FocusUiState, vm: FocusViewModel) {
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
+            LiquidGlassOutlinedButton(
                 onClick = vm::skip,
                 enabled = !idle,
                 modifier = Modifier.weight(1f),
@@ -323,12 +346,12 @@ private fun Controls(ui: FocusUiState, vm: FocusViewModel) {
                 Spacer(Modifier.width(6.dp))
                 Text("跳过")
             }
-            OutlinedButton(
+            LiquidGlassOutlinedButton(
                 onClick = { vm.extend(5) },
                 enabled = !idle,
                 modifier = Modifier.weight(1f),
             ) { Text("+5 分钟") }
-            OutlinedButton(
+            LiquidGlassOutlinedButton(
                 onClick = vm::stop,
                 enabled = !idle,
                 modifier = Modifier.weight(1f),
@@ -367,49 +390,47 @@ private fun TagSection(
         }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             tags.forEach { name ->
-                FilterChip(
+                LiquidGlassChip(
+                    label = name,
                     selected = ui.tagName == name,
                     onClick = { onToggle(name) },
-                    label = { Text(name) },
                 )
             }
             // 选中的是课名（不在标签表里）时也画出来，否则看不出自己选了什么
             if (ui.tagName.isNotBlank() && ui.tagName !in tags) {
-                FilterChip(
+                LiquidGlassChip(
+                    label = ui.tagName,
                     selected = true,
                     onClick = { onToggle(ui.tagName) },
-                    label = { Text(ui.tagName) },
                 )
             }
-            FilterChip(
+            LiquidGlassChip(
+                label = "新建",
                 selected = false,
+                leadingIcon = Icons.Filled.Add,
                 onClick = onNew,
-                label = { Text("＋ 新建") },
-                leadingIcon = {
-                    Icon(Icons.Filled.Add, contentDescription = null, Modifier.size(16.dp))
-                },
             )
             if (ui.courseCandidates.isNotEmpty()) {
-                FilterChip(
+                LiquidGlassChip(
+                    label = if (showCourseNames) "收起课名" else "从课表选",
                     selected = showCourseNames,
                     onClick = { showCourseNames = !showCourseNames },
-                    label = { Text(if (showCourseNames) "收起课名" else "从课表选") },
                 )
             }
         }
         if (showCourseNames) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 ui.courseCandidates.forEach { name ->
-                    FilterChip(
+                    LiquidGlassChip(
+                        label = name,
                         selected = ui.tagName == name,
                         onClick = { onToggle(name) },
-                        label = { Text(name) },
                     )
                 }
             }
@@ -438,6 +459,7 @@ private fun TagManageDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("管理标签") },
         text = {
             Column(
@@ -492,6 +514,7 @@ private fun TagManageDialog(
     pendingDelete?.let { tag ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
+            containerColor = liquidGlassDialogContainerColor(),
             title = { Text("删除标签「${tag.name}」？") },
             text = {
                 Text(
@@ -637,6 +660,7 @@ private fun TimerSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("计时设置") },
         text = {
             Column(
@@ -724,6 +748,7 @@ private fun NewTagDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("新建标签") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -767,6 +792,7 @@ private fun ManualRecordDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("补录专注") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

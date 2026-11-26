@@ -16,9 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -44,6 +43,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.components.LiquidGlassButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,13 +62,13 @@ fun LoginScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("登录") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
             )
         },
@@ -91,16 +93,14 @@ fun LoginScreen(
             )
 
             // ⚠️ 副作用必须如实告知，否则用户会以为 App 把官方 App 弄坏了
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = "首次登录会使手机上的「豫见郑大」下线一次（学校统一认证机制导致），之后不会。\n" +
                         "登录后建议去“安全中心”把本设备设为可信设备，以后就不需要短信验证码了。",
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(14.dp),
                 )
             }
 
@@ -133,7 +133,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = vm::submitSms, enabled = !state.busy) { Text("提交验证码") }
+                    LiquidGlassButton(onClick = vm::submitSms, enabled = !state.busy) { Text("提交验证码") }
                     Spacer(Modifier.width(12.dp))
                     // 冷却倒计时：学校约 1 分钟才允许重发，短信本身也可能要 1 分钟才到
                     TextButton(
@@ -196,7 +196,7 @@ fun LoginScreen(
                         }
                     }
                 }
-                Button(
+                LiquidGlassButton(
                     onClick = vm::submitCredentials,
                     enabled = !state.busy && state.inputIssue == null,
                     modifier = Modifier.fillMaxWidth(),

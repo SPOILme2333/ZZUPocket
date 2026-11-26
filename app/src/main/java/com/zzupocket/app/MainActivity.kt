@@ -17,6 +17,7 @@ import com.zzupocket.app.data.prefs.DarkMode
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.ui.nav.AppNav
 import com.zzupocket.app.ui.nav.AppRoutes
+import com.zzupocket.app.ui.theme.SchemeVariant
 import com.zzupocket.app.ui.theme.ZZUPocketTheme
 import com.zzupocket.app.ui.widget.Widgets
 import kotlinx.coroutines.launch
@@ -63,10 +64,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             // 配色与深浅色是全局设置，直接在这里喂给主题（改完立刻全应用生效）
             val prefs by AppGraph.uiPrefsStore.flow
-                .collectAsStateWithLifecycle(initialValue = UiPrefs())
+                .collectAsStateWithLifecycle(initialValue = AppGraph.uiPrefsStore.latest)
             ZZUPocketTheme(
                 darkMode = prefs.darkMode,
                 preset = prefs.themePreset,
+                customSeedArgb = prefs.customThemeSeedArgb,
+                variant = runCatching { SchemeVariant.valueOf(prefs.schemeVariantName) }
+                    .getOrDefault(SchemeVariant.TONAL_SPOT),
                 darkContrast = prefs.darkContrast,
                 darkTinted = prefs.darkTinted,
             ) {

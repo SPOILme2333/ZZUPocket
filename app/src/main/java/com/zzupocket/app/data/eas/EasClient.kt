@@ -9,6 +9,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.serializer
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,6 +18,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 /**
  * 教务系统（新版 EAMS / 树维）客户端。
@@ -381,6 +385,321 @@ class EasClient(
         val date: String,
     )
 
+    // ── 成绩 / 考场 / 学籍 DTO（对齐 jwxt 官方移动 H5）────────────────
+
+    @Serializable
+    data class GradeLessonDto(
+        val courseType: NamedDto? = null,
+        val courseProperty: NamedDto? = null,
+    )
+
+    @Serializable
+    data class ProcessGradeDto(
+        val name: String? = null,
+        val result: JsonPrimitive? = null,
+    )
+
+    @Serializable
+    data class SubGradeDto(
+        val published: JsonPrimitive? = null,
+        val result: JsonPrimitive? = null,
+        val subGradeType: NamedDto? = null,
+        val processGradeSearchVms: List<ProcessGradeDto> = emptyList(),
+    )
+
+    @Serializable
+    data class SimpleGradeDto(
+        val result: JsonPrimitive? = null,
+    )
+
+    @Serializable
+    data class GradeItemDto(
+        val semesterCode: String = "",
+        val courseCode: String = "",
+        val courseNameZh: String = "",
+        val courseNameEn: String? = null,
+        val credits: Double = 0.0,
+        val gp: JsonPrimitive? = null,
+        val finalGrade: JsonPrimitive? = null,
+        val passed: Boolean = true,
+        val retake: Boolean = false,
+        val state: String? = null,
+        val gradeDisplayShowStatus: String? = null,
+        val cultivateType: NamedDto? = null,
+        val lesson: GradeLessonDto? = null,
+        val subGrades: List<SubGradeDto> = emptyList(),
+        val makeupGrade: SimpleGradeDto? = null,
+        val delayGrade: SimpleGradeDto? = null,
+    )
+
+    @Serializable
+    data class GpaRankDto(
+        val gpa: JsonPrimitive? = null,
+        val rank: JsonPrimitive? = null,
+        val total: JsonPrimitive? = null,
+    )
+
+    @Serializable
+    data class ExamItemDto(
+        val id: Long = 0L,
+        val courseNameZh: String = "",
+        val courseNameEn: String? = null,
+        val examDate: String? = null,
+        val weekDay: Int = 0,
+        val startTime: Int = 0,
+        val endTime: Int = 0,
+        val place: String? = null,
+        val placeEn: String? = null,
+        val examType: NamedDto? = null,
+        val cultivateType: NamedDto? = null,
+    )
+
+    @Serializable
+    data class StudentPersonInfoDto(
+        val nameZh: String? = null,
+        val nameEn: String? = null,
+        val gender: NamedDto? = null,
+        val nation: NamedDto? = null,
+    )
+
+    @Serializable
+    data class StudentBaseInfoDto(
+        val code: String = "",
+        val grade: String? = null,
+        val enterSchoolGrade: String? = null,
+        val enterSchoolDate: String? = null,
+        val cultivateType: NamedDto? = null,
+        val education: NamedDto? = null,
+        val department: NamedDto? = null,
+        val major: NamedDto? = null,
+        val majorDirection: NamedDto? = null,
+        val adminclass: NamedDto? = null,
+        val campus: NamedDto? = null,
+        val stdStatus: NamedDto? = null,
+        val getInSchool: Boolean? = null,
+        val studyForm: NamedDto? = null,
+        val firstTutor: NamedDto? = null,
+        val personInfo: StudentPersonInfoDto? = null,
+    )
+
+    @Serializable
+    data class StudentRegisterDto(
+        val studentCode: String? = null,
+        val semester: NamedDto? = null,
+        val registered: JsonPrimitive? = null,
+        val payed: JsonPrimitive? = null,
+    )
+
+    @Serializable
+    data class StudentGraduateDto(
+        val studentCode: String? = null,
+        val expectedGraduateDate: String? = null,
+    )
+
+    suspend fun fetchGrades(userToken: String): List<GradeItemDto> =
+        getData(GRADES_URL, userToken, "成绩单")
+
+    suspend fun fetchGpaRank(userToken: String): GpaRankDto =
+        getData(GPA_RANK_URL, userToken, "绩点排名")
+
+    suspend fun fetchExams(userToken: String): List<ExamItemDto> =
+        getData(EXAMS_URL, userToken, "考场安排")
+
+    suspend fun fetchStudentBaseInfos(userToken: String): List<StudentBaseInfoDto> =
+        getData(STUDENT_BASE_URL, userToken, "学籍基础信息")
+
+    suspend fun fetchStudentRegisters(userToken: String): List<StudentRegisterDto> =
+        getData(STUDENT_REGISTER_URL, userToken, "学期注册记录")
+
+    suspend fun fetchStudentGraduates(userToken: String): List<StudentGraduateDto> =
+        getData(STUDENT_GRADUATE_URL, userToken, "毕业信息")
+
+    // ── 培养方案与完成情况 DTO（对齐 eams-student-plan-app / eams-student-plan-complete-app）─
+
+    @Serializable
+    data class PlanRequireInfoDto(
+        val credits: JsonPrimitive? = null,
+        val requiredCredits: JsonPrimitive? = null,
+        val requiredSubModuleNum: Int? = null,
+    )
+
+    @Serializable
+    data class PlanCourseBriefDto(
+        val id: Long = 0L,
+        val code: String = "",
+        val nameZh: String = "",
+        val nameEn: String? = null,
+        val credits: JsonPrimitive? = null,
+    )
+
+    @Serializable
+    data class PlanCompletionCourseDto(
+        val course: PlanCourseBriefDto? = null,
+        val compulsory: Boolean? = null,
+        val result: String? = null,
+        val resultEn: String? = null,
+        val resultScore: JsonPrimitive? = null,
+        val gp: JsonPrimitive? = null,
+        val terms: List<String> = emptyList(),
+        val marks: List<String> = emptyList(),
+        val remark: String? = null,
+        val substituteCourses: List<JsonElement> = emptyList(),
+        val alternativeCourses: List<JsonElement> = emptyList(),
+    )
+
+    @Serializable
+    data class PlanCompletionModuleDto(
+        val type: NamedDto? = null,
+        val typeCode: String? = null,
+        val result: String? = null,
+        val resultEn: String? = null,
+        val requireInfo: PlanRequireInfoDto? = null,
+        val passedCredits: JsonPrimitive? = null,
+        val skip: JsonPrimitive? = null,
+        val taking: JsonPrimitive? = null,
+        val planCourses: List<PlanCompletionCourseDto> = emptyList(),
+        val children: List<PlanCompletionModuleDto> = emptyList(),
+    )
+
+    @Serializable
+    data class PlanCompletionInfoDto(
+        val requireInfo: PlanRequireInfoDto? = null,
+        val modules: List<PlanCompletionModuleDto> = emptyList(),
+        val outplanCourses: List<PlanCompletionCourseDto> = emptyList(),
+    )
+
+    @Serializable
+    data class StudentProgramInfoDto(
+        val id: Long = 0L,
+        val grade: String? = null,
+        val requireCredits: JsonPrimitive? = null,
+        val department: NamedDto? = null,
+        val major: NamedDto? = null,
+        val majorDirection: NamedDto? = null,
+        val education: NamedDto? = null,
+        val cultivateType: NamedDto? = null,
+    )
+
+    @Serializable
+    data class PlanGuideCourseDto(
+        val course: PlanCourseBriefDto? = null,
+        val compulsory: Boolean? = null,
+        val terms: List<String> = emptyList(),
+        val remark: String? = null,
+    )
+
+    @Serializable
+    data class PlanGuideModuleDto(
+        val type: NamedDto? = null,
+        val requireInfo: PlanRequireInfoDto? = null,
+        val planCourses: List<PlanGuideCourseDto> = emptyList(),
+        val children: List<PlanGuideModuleDto> = emptyList(),
+    )
+
+    @Serializable
+    data class PlanCoursesTreeDto(
+        val culTypeIndex: Int? = null,
+        val children: List<PlanGuideModuleDto> = emptyList(),
+    )
+
+    @Serializable
+    data class TrainObjectiveItemDto(
+        val indexNo: JsonPrimitive? = null,
+        val type: NamedDto? = null,
+        val contentZh: String? = null,
+        val content: String? = null,
+    )
+
+    @Serializable
+    data class GraduationRequirementItemDto(
+        val id: JsonPrimitive? = null,
+        val parentId: JsonPrimitive? = null,
+        val indexNo: JsonPrimitive? = null,
+        val nameZh: String? = null,
+        val contentZh: String? = null,
+        val content: String? = null,
+    )
+
+    suspend fun fetchPlanCompletionCultivateTypes(userToken: String): List<NamedDto> =
+        getData(PLAN_COMPLETION_TYPES_URL, userToken, "培养方案完成情况培养类型")
+
+    suspend fun fetchPlanCompletionInfo(userToken: String, cultivateTypeCode: String): PlanCompletionInfoDto {
+        val encoded = URLEncoder.encode(cultivateTypeCode, Charsets.UTF_8.name())
+        return getData("$PLAN_COMPLETION_INFO_URL?code=$encoded", userToken, "培养方案完成情况")
+    }
+
+    suspend fun fetchMyPrograms(userToken: String): List<StudentProgramInfoDto> =
+        getData(PLAN_MY_PROGRAMS_URL, userToken, "指导性培养方案")
+
+    suspend fun fetchProgramPlanCourses(
+        userToken: String,
+        programId: Long,
+        culTypeIndex: Int = 0,
+    ): PlanCoursesTreeDto =
+        getData("$PLAN_COURSES_URL/$programId/$culTypeIndex", userToken, "培养方案课程体系")
+
+    suspend fun fetchProgramTrainObjectives(
+        userToken: String,
+        programId: Long,
+    ): List<TrainObjectiveItemDto> =
+        getData("$PLAN_OBJECTIVE_URL/$programId", userToken, "培养目标")
+
+    suspend fun fetchProgramGraduationRequirements(
+        userToken: String,
+        programId: Long,
+    ): List<GraduationRequirementItemDto> =
+        getData("$PLAN_GRADUATION_REQ_URL/$programId", userToken, "毕业要求")
+
+    /**
+     * 探测教务门户服务目录原始 JSON（带短超时与 Nox 网关自动恢复链），
+     * 供「培养计划」等入口发现学校开放的业务地址；失败安全返回 null。
+     */
+    suspend fun fetchDoorServiceListRaw(
+        userToken: String,
+        timeoutSec: Long = 5L,
+        retriedAfterGatewayAuth: Boolean = false,
+    ): String? = withContext(Dispatchers.IO) {
+        val shortClient = client.newBuilder()
+            .connectTimeout(timeoutSec.coerceAtMost(4L), TimeUnit.SECONDS)
+            .readTimeout(timeoutSec, TimeUnit.SECONDS)
+            .build()
+        val request = Request.Builder()
+            .url(DOOR_SERVICE_LIST_URL)
+            .header("Authorization", userToken)
+            .header("X-Device-Info", "Android")
+            .header("X-Terminal-Info", "")
+            .get()
+            .build()
+        val response = try {
+            shortClient.newCall(request).execute()
+        } catch (_: IOException) {
+            return@withContext null
+        }
+        response.use { resp ->
+            val code = resp.code
+            if (code in 300..399 && !retriedAfterGatewayAuth && gateway != null) {
+                val restored = runCatching {
+                    redirectGuardOf(
+                        code = code,
+                        path = "/eams-door/api/v1/service/list-app",
+                        location = resp.header("Location"),
+                        allowAutoAuth = true,
+                    )
+                    true
+                }.getOrDefault(false)
+                if (restored) {
+                    return@withContext fetchDoorServiceListRaw(
+                        userToken = userToken,
+                        timeoutSec = timeoutSec,
+                        retriedAfterGatewayAuth = true,
+                    )
+                }
+            }
+            if (!resp.isSuccessful) return@withContext null
+            resp.body?.string()
+        }
+    }
+
     suspend fun fetchCampuses(userToken: String): List<CampusDto> =
         getData("$MICRO/room/place/campus", userToken, "校区列表")
 
@@ -648,5 +967,18 @@ class EasClient(
         private const val COURSE_URL = "$JWXT/eams-micro-server/api/v1/lesson/student/course-table"
         private const val CURRENT_SEMESTER_URL = "$JWXT/eams-micro-server/api/v1/semester/current-semester"
         private const val PERIODS_URL = "$JWXT/eams-micro-server/api/v1/room/system/course-units"
+        private const val GRADES_URL = "$MICRO/grade/student/grades"
+        private const val GPA_RANK_URL = "$MICRO/grade/student/gpa-rank"
+        private const val EXAMS_URL = "$MICRO/exam/student/exam"
+        private const val STUDENT_BASE_URL = "$MICRO/student/base-info"
+        private const val STUDENT_REGISTER_URL = "$MICRO/student/register-info"
+        private const val STUDENT_GRADUATE_URL = "$MICRO/student/graduate-info"
+        private const val DOOR_SERVICE_LIST_URL = "$JWXT/eams-door/api/v1/service/list-app"
+        private const val PLAN_COMPLETION_TYPES_URL = "$MICRO/plan/search/completion/cultivateTypes"
+        private const val PLAN_COMPLETION_INFO_URL = "$MICRO/plan/search/completion/info"
+        private const val PLAN_MY_PROGRAMS_URL = "$MICRO/plan/student/my-program"
+        private const val PLAN_COURSES_URL = "$MICRO/plan/student/plan-courses"
+        private const val PLAN_OBJECTIVE_URL = "$MICRO/plan/student/train-objective"
+        private const val PLAN_GRADUATION_REQ_URL = "$MICRO/plan/student/graduation-requirement"
     }
 }

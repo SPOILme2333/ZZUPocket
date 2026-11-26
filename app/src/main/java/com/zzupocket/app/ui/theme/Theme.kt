@@ -41,7 +41,9 @@ fun rememberEffectiveDark(darkMode: DarkMode): Boolean = when (darkMode) {
 @Composable
 fun ZZUPocketTheme(
     darkMode: DarkMode = DarkMode.SYSTEM,
-    preset: ThemePreset = ThemePreset.DYNAMIC,
+    preset: ThemePreset = ThemePreset.ZZU,
+    customSeedArgb: Int = 0xFF223C3B.toInt(),
+    variant: SchemeVariant = SchemeVariant.TONAL_SPOT,
     darkContrast: DarkContrast = DarkContrast.STANDARD,
     darkTinted: Boolean = false,
     content: @Composable () -> Unit,
@@ -50,11 +52,15 @@ fun ZZUPocketTheme(
     val colorScheme = rememberAppColorScheme(
         preset = preset,
         dark = dark,
+        customSeedArgb = customSeedArgb,
+        variant = variant,
         darkContrast = darkContrast,
         darkTinted = darkTinted,
     )
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = ZZUTypography,
+        shapes = ZZUShapes,
         content = content,
     )
 }
@@ -78,12 +84,13 @@ fun ZZUPocketTheme(
 fun rememberAppColorScheme(
     preset: ThemePreset,
     dark: Boolean,
+    customSeedArgb: Int = 0xFF223C3B.toInt(),
     variant: SchemeVariant = SchemeVariant.TONAL_SPOT,
     darkContrast: DarkContrast = DarkContrast.STANDARD,
     darkTinted: Boolean = false,
 ): ColorScheme {
     val context = LocalContext.current
-    return remember(preset, dark, variant, darkContrast, darkTinted) {
+    return remember(preset, dark, customSeedArgb, variant, darkContrast, darkTinted) {
         val contrast = MaterialYouScheme.darkContrastLevel(darkContrast)
         fun build(seedArgb: Int, level: Double): ColorScheme {
             val scheme = MaterialYouScheme.fromSeed(
@@ -94,16 +101,32 @@ fun rememberAppColorScheme(
             )
             return if (dark && darkTinted) MaterialYouScheme.tintedSurfaces(scheme) else scheme
         }
-        val seed = preset.seedArgb
-        when {
-            seed != null -> build(
-                seed,
+        when (preset) {
+            ThemePreset.ZZU -> {
+                val emblem = MaterialYouScheme.zzuEmblemScheme(
+                    dark = dark,
+                    variant = variant,
+                    contrastLevel = if (dark) contrast else MaterialYouScheme.DEFAULT_CONTRAST,
+                )
+                if (dark && darkTinted) MaterialYouScheme.tintedSurfaces(emblem) else emblem
+            }
+            ThemePreset.CUSTOM -> build(
+                customSeedArgb,
                 if (dark) contrast else MaterialYouScheme.DEFAULT_CONTRAST,
             )
-            !dark -> dynamicLightColorScheme(context)
-            dark && darkTinted -> build(dynamicDarkColorScheme(context).primary.toArgb(), contrast)
-            contrast > 0.0 -> build(dynamicDarkColorScheme(context).primary.toArgb(), contrast)
-            else -> dynamicDarkColorScheme(context)
+            else -> {
+                val seed = preset.seedArgb
+                when {
+                    seed != null -> build(
+                        seed,
+                        if (dark) contrast else MaterialYouScheme.DEFAULT_CONTRAST,
+                    )
+                    !dark -> dynamicLightColorScheme(context)
+                    dark && darkTinted -> build(dynamicDarkColorScheme(context).primary.toArgb(), contrast)
+                    contrast > 0.0 -> build(dynamicDarkColorScheme(context).primary.toArgb(), contrast)
+                    else -> dynamicDarkColorScheme(context)
+                }
+            }
         }
     }
 }

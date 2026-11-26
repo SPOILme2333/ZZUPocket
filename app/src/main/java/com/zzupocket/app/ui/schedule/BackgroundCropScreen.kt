@@ -80,7 +80,7 @@ fun BackgroundCropScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = UiPrefs())
+    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = AppGraph.uiPrefsStore.latest)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 

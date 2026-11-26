@@ -19,6 +19,7 @@ class AuthRepository(
     private val store: TokenStore,
     private val cas: CasClient,
     private val ecard: EcardClient,
+    private val onLoginSuccess: () -> Unit = {},
 ) {
 
     sealed interface LoginStep {
@@ -130,6 +131,7 @@ class AuthRepository(
         store.ecardAccessToken = null
         store.ecardRefreshToken = null
         store.ecardTokenAt = 0L
+        onLoginSuccess()
         return LoginStep.Success(account)
     }
 

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zzupocket.app.core.CourseShortener
 
 /**
  * 首页模块的定义与解析（issue #19：模块可隐藏、可调序）。
@@ -33,15 +34,19 @@ import androidx.compose.ui.unit.dp
 object TodayModules {
 
     const val TODAY_MODULE_TIMELINE = "timeline"
+    const val TODAY_MODULE_FOCUS = "focus"
+    const val TODAY_MODULE_COUNTDOWN = "countdown"
     const val TODAY_MODULE_SCHEDULE = "customSchedule"
     const val TODAY_MODULE_LIBRARY = "library"
     const val TODAY_MODULE_ROOMS = "rooms"
     const val TODAY_MODULE_ELECTRICITY = "electricity"
     const val TODAY_MODULE_CARD = "card"
 
-    /** 默认顺序（= 0.36.x 的固定版式） */
+    /** 默认顺序 */
     val DEFAULT_ORDER = listOf(
         TODAY_MODULE_TIMELINE,
+        TODAY_MODULE_FOCUS,
+        TODAY_MODULE_COUNTDOWN,
         TODAY_MODULE_SCHEDULE,
         TODAY_MODULE_LIBRARY,
         TODAY_MODULE_ROOMS,
@@ -52,6 +57,8 @@ object TodayModules {
     /** 展示名（自定义编辑器里用） */
     val LABELS = mapOf(
         TODAY_MODULE_TIMELINE to "今天的时间轴",
+        TODAY_MODULE_FOCUS to "番茄专注",
+        TODAY_MODULE_COUNTDOWN to "考试与日程倒数",
         TODAY_MODULE_SCHEDULE to "今天的日程（空时自动隐藏）",
         TODAY_MODULE_LIBRARY to "图书馆 · 座位预约",
         TODAY_MODULE_ROOMS to "空教室查询",
@@ -61,6 +68,8 @@ object TodayModules {
 
     /** 可隐藏的模块（时间轴除外） */
     val HIDEABLE = setOf(
+        TODAY_MODULE_FOCUS,
+        TODAY_MODULE_COUNTDOWN,
         TODAY_MODULE_SCHEDULE,
         TODAY_MODULE_LIBRARY,
         TODAY_MODULE_ROOMS,
@@ -95,6 +104,7 @@ object TodayModules {
 @Composable
 fun TodayCustomScheduleCard(
     entries: List<TimelineEntry>,
+    smartShorten: Boolean = false,
     onOpenSchedule: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -128,7 +138,7 @@ fun TodayCustomScheduleCard(
                     )
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = entry.title,
+                            text = CourseShortener.shorten(entry.title, smartShorten),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,

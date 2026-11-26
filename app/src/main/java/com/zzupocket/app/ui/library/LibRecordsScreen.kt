@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -47,6 +49,7 @@ import com.zzupocket.app.data.repo.LibRecordRepository
 import com.zzupocket.app.domain.LibRecord
 import com.zzupocket.app.domain.LibRecordStats
 import com.zzupocket.app.ui.components.GlassCard
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
 import com.zzupocket.app.ui.focus.FocusHeatmap
 import com.zzupocket.app.ui.focus.HeatmapLegend
 import java.time.LocalDate
@@ -135,13 +138,13 @@ fun LibRecordsScreen(
     val today = remember { LocalDate.now() }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("我的预约记录") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { vm.refresh() }) {

@@ -33,11 +33,14 @@ import androidx.compose.material3.MaterialTheme
 import com.zzupocket.app.ui.components.DescriptionText
 import com.zzupocket.app.ui.components.GlassCard
 import com.zzupocket.app.ui.components.HintText
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.components.liquidGlassDialogContainerColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -100,13 +104,13 @@ fun ElectricityScreen(
     val roomsMissing = state.light?.roomId.isNullOrBlank() && state.ac?.roomId.isNullOrBlank()
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("电费") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
                 actions = {
                     IconButton(onClick = { showRooms = true }) {
@@ -613,6 +617,7 @@ private fun PriceDialog(current: Double, onDismiss: () -> Unit, onConfirm: (Doub
     val parsed = text.toDoubleOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = liquidGlassDialogContainerColor(),
         title = { Text("电价") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

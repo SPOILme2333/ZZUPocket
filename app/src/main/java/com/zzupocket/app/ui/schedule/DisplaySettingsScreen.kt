@@ -1,6 +1,7 @@
 ﻿package com.zzupocket.app.ui.schedule
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +52,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +62,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -75,6 +78,9 @@ import com.zzupocket.app.data.prefs.CourseTextMode
 import com.zzupocket.app.data.prefs.GridDensity
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.data.prefs.UiPrefsStore
+import com.zzupocket.app.data.repo.ScheduleIcsExportHelper
+import com.zzupocket.app.ui.components.LiquidGlassBackButton
+import com.zzupocket.app.ui.widget.Widgets
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -106,7 +112,7 @@ class DisplaySettingsViewModel : ViewModel() {
     private val scheduleRepo = AppGraph.scheduleRepository
 
     val prefs: StateFlow<UiPrefs> = store.flow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, UiPrefs())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, store.latest)
 
     /** 从学号前 4 位推断的入学年，用于在界面上展示"当前生效的入学年" */
     var detectedEnrollmentYear: Int? = null
@@ -119,6 +125,22 @@ class DisplaySettingsViewModel : ViewModel() {
     }
 
     fun setShowWeekend(v: Boolean) = viewModelScope.launch { store.setShowWeekend(v) }
+    fun setSmartShortCourseName(v: Boolean) = viewModelScope.launch {
+        store.setSmartShortCourseName(v)
+        AppGraph.applicationScope.launch { AppGraph.classReminderScheduler.reschedule() }
+        AppGraph.appContextOrNull()?.let { Widgets.refreshAll(it) }
+    }
+
+    /** 导出当前学期课表为 `.ics` 日历文本；无排课时返回 null */
+    suspend fun buildIcsExport(): Pair<String, String>? {
+        val p = prefs.value
+        val lead = if (p.classReminderEnabled) p.classReminderMinutes else 15
+        return ScheduleIcsExportHelper.exportCurrentSchedule(
+            scheduleRepo = scheduleRepo,
+            uiPrefs = store,
+            reminderMinutes = lead,
+        )
+    }
 
     /** 「课程总览」要打开的学期：优先当前学期，退而求其次第一个 */
     suspend fun currentSemesterId(): Int? =
@@ -288,15 +310,33 @@ fun DisplaySettingsScreen(
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> if (uri != null) onOpenCrop(uri) }
+    var pendingIcsContent by remember { mutableStateOf<String?>(null) }
+    val createIcs = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/calendar"),
+    ) { uri ->
+        val content = pendingIcsContent
+        pendingIcsContent = null
+        if (uri != null && content != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(content.toByteArray(Charsets.UTF_8))
+                }
+            }.onSuccess {
+                Toast.makeText(context, "已导出日历文件 (.ics)", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "导出失败：${it.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text("课程表设置") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    LiquidGlassBackButton(onClick = onBack)
                 },
             )
         },
@@ -322,6 +362,22 @@ fun DisplaySettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("课程总览（本学期全部课程）") }
 
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        val exported = vm.buildIcsExport()
+                        if (exported == null) {
+                            Toast.makeText(context, "暂无可导出的课程数据", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val (fileName, ics) = exported
+                            pendingIcsContent = ics
+                            createIcs.launch(fileName)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("导出课表为日历 (.ics)") }
+
             // 教学周放在最上面：周次对不对，比"好不好看"重要得多
             WeekSettingsCard(
                 week = week,
@@ -338,6 +394,12 @@ fun DisplaySettingsScreen(
                     hint = "关掉后只显示周一到周五，每列更宽、课名更完整",
                     checked = prefs.showWeekend,
                     onCheckedChange = vm::setShowWeekend,
+                )
+                SwitchRow(
+                    title = "智能精简长课程名",
+                    hint = "如：高等数学→高数、习概、毛概、近代史（保留罗马数字与上下册后缀）",
+                    checked = prefs.smartShortCourseName,
+                    onCheckedChange = vm::setSmartShortCourseName,
                 )
                 ChoiceRow(
                     title = "课程块描边",

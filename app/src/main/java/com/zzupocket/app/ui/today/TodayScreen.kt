@@ -19,21 +19,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.LocalLibrary
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.MeetingRoom
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material.icons.outlined.LocalLibrary
+import androidx.compose.material.icons.outlined.MeetingRoom
 import com.zzupocket.app.ui.components.GlassCard
-import androidx.compose.material3.CardDefaults
+import com.zzupocket.app.ui.components.GlassInsetDivider
+import com.zzupocket.app.ui.components.GlassListCard
+import com.zzupocket.app.ui.components.GlassListRow
+import com.zzupocket.app.ui.components.LiquidGlassButton
+import com.zzupocket.app.ui.components.LiquidGlassIconButton
+import com.zzupocket.app.ui.components.LiquidGlassOutlinedButton
+import com.zzupocket.app.ui.components.StatusPill
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +50,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -57,6 +62,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -65,7 +71,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.domain.EnergyStats
+import com.zzupocket.app.domain.FocusStats
+import com.zzupocket.app.domain.PomodoroClock
+import com.zzupocket.app.focus.TimerUi
 import com.zzupocket.app.ui.nav.DOCK_CLEARANCE
+import com.zzupocket.app.ui.theme.tabularNumbers
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -90,6 +100,8 @@ fun TodayScreen(
     onOpenCard: () -> Unit,
     onOpenLibrary: () -> Unit = {},
     onOpenRooms: () -> Unit = {},
+    onOpenFocus: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
     vm: TodayViewModel = viewModel(),
     timelineVm: TodayTimelineViewModel = viewModel(),
     cardVm: TodayCardViewModel = viewModel(),
@@ -97,14 +109,19 @@ fun TodayScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val timeline by timelineVm.state.collectAsStateWithLifecycle()
     val card by cardVm.state.collectAsStateWithLifecycle()
+    val timerUi by AppGraph.pomodoroEngine.state.collectAsStateWithLifecycle()
+    val countdownItems by AppGraph.countdownRepository.observeAll()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     // 首页模块自定义（issue #19）：顺序 + 隐藏，从 UiPrefs 读
     val scope = rememberCoroutineScope()
     val uiPrefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = null)
+    val smartShorten = uiPrefs?.smartShortCourseName == true
     val moduleLayout = remember(uiPrefs) {
         TodayModules.resolved(uiPrefs?.todayModuleOrder.orEmpty(), uiPrefs?.todayModulesHidden.orEmpty())
     }
     var showModuleEditor by remember { mutableStateOf(false) }
+    var showCountdownSheet by remember { mutableStateOf(false) }
 
     // 从登录页返回、或从后台切回来时重新确认登录态并补一次刷新。
     // 少了这一步，登录成功回到「今天」仍会显示"未登录"——因为 ViewModel 不会重建。
@@ -116,16 +133,24 @@ fun TodayScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("首页") },
+                title = { Text("今天", style = MaterialTheme.typography.headlineMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 actions = {
-                    IconButton(onClick = { showModuleEditor = true }) {
-                        Icon(Icons.Filled.Tune, contentDescription = "自定义首页模块")
-                    }
-                    IconButton(onClick = onOpenDiagnostics) {
-                        Icon(Icons.Filled.MoreHoriz, contentDescription = "登录状态")
-                    }
+                    LiquidGlassIconButton(
+                        icon = Icons.Filled.Tune,
+                        contentDescription = "自定义首页模块",
+                        onClick = { showModuleEditor = true },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    LiquidGlassIconButton(
+                        icon = Icons.Filled.MoreHoriz,
+                        contentDescription = "登录状态",
+                        onClick = onOpenDiagnostics,
+                    )
+                    Spacer(Modifier.width(12.dp))
                 },
             )
         },
@@ -137,51 +162,103 @@ fun TodayScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
                 // 悬浮 dock 是覆盖层：内容从胶囊底下穿过，这里垫出尾部余量，
-                // 让"校园卡"那最后一个卡能完整滚出胶囊（见 DOCK_CLEARANCE）。
+                // 让末尾卡能完整滚出胶囊（见 DOCK_CLEARANCE）。
                 .padding(bottom = DOCK_CLEARANCE),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Spacer(Modifier.height(4.dp))
+            val headerDateWeek = remember(timeline.dateText, timeline.week) {
+                listOfNotNull(
+                    timeline.dateText.takeIf { it.isNotBlank() }
+                        ?.replace(" 月 ", "月")
+                        ?.replace(" 日", "日"),
+                    timeline.week?.let { "第 $it 周" },
+                ).joinToString(" · ")
+            }
+            if (headerDateWeek.isNotEmpty()) {
+                Text(
+                    text = headerDateWeek,
+                    style = MaterialTheme.typography.bodyMedium.tabularNumbers(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
 
             if (!state.loggedIn && state.light.kwh == null && state.ac.kwh == null) {
                 LoginPromptCard(onOpenLogin)
             }
 
-            // 模块按用户自定义的顺序渲染（issue #19）；隐藏的模块直接不出现。
-            // 每个模块的加载/数据逻辑不变，这里只管"排不排、排哪"。
-            moduleLayout.forEach { (moduleId, visible) ->
-                if (!visible) return@forEach
+            TodayHeroBanner(
+                timeline = timeline,
+                smartShorten = smartShorten,
+                onOpenSchedule = onOpenSchedule,
+            )
+
+            // 模块按用户自定义的顺序渲染（issue #19）；相邻的图书馆与空教室合并进同一张列表卡。
+            val visibleModules = remember(moduleLayout) {
+                moduleLayout.filter { it.second }.map { it.first }
+            }
+            var idx = 0
+            while (idx < visibleModules.size) {
+                val moduleId = visibleModules[idx]
+                val nextId = visibleModules.getOrNull(idx + 1)
+                if ((moduleId == TodayModules.TODAY_MODULE_LIBRARY && nextId == TodayModules.TODAY_MODULE_ROOMS) ||
+                    (moduleId == TodayModules.TODAY_MODULE_ROOMS && nextId == TodayModules.TODAY_MODULE_LIBRARY)
+                ) {
+                    GlassListCard {
+                        if (moduleId == TodayModules.TODAY_MODULE_LIBRARY) {
+                            GlassListRow(Icons.Outlined.LocalLibrary, "图书馆 · 座位预约", "学校原版网页", onClick = onOpenLibrary)
+                            GlassInsetDivider()
+                            GlassListRow(Icons.Outlined.MeetingRoom, "空教室查询", "按楼看每间教室哪节有课", onClick = onOpenRooms)
+                        } else {
+                            GlassListRow(Icons.Outlined.MeetingRoom, "空教室查询", "按楼看每间教室哪节有课", onClick = onOpenRooms)
+                            GlassInsetDivider()
+                            GlassListRow(Icons.Outlined.LocalLibrary, "图书馆 · 座位预约", "学校原版网页", onClick = onOpenLibrary)
+                        }
+                    }
+                    idx += 2
+                    continue
+                }
+
                 when (moduleId) {
                     TodayModules.TODAY_MODULE_TIMELINE ->
-                        // ① 今天的时间轴：上课 / 已完成的专注（课间空档不画，见 TodayTimelineCard 的注释）
-                        TodayTimelineCard(state = timeline, onOpenSchedule = onOpenSchedule)
+                        TodayTimelineCard(
+                            state = timeline,
+                            onOpenSchedule = onOpenSchedule,
+                            showStatusHint = false,
+                        )
+
+                    TodayModules.TODAY_MODULE_FOCUS ->
+                        TodayFocusQuickCard(
+                            timerUi = timerUi,
+                            focusSeconds = timeline.focusSeconds,
+                            focusCount = timeline.focusCount,
+                            onOpenFocus = onOpenFocus,
+                        )
+
+                    TodayModules.TODAY_MODULE_COUNTDOWN ->
+                        TodayCountdownCard(
+                            items = countdownItems,
+                            onManage = { showCountdownSheet = true },
+                        )
 
                     TodayModules.TODAY_MODULE_SCHEDULE ->
-                        // ② 今天的日程：自己在课表里加的（没有就不显示这张卡）
                         TodayCustomScheduleCard(
                             entries = timeline.customEntries,
+                            smartShorten = smartShorten,
                             onOpenSchedule = onOpenSchedule,
                         )
 
                     TodayModules.TODAY_MODULE_LIBRARY ->
-                        // ②.5 快速入口（和非学习页同款的一行式）：
-                        LibraryEntryCard(
-                            icon = Icons.Filled.LocalLibrary,
-                            title = "图书馆 · 座位预约",
-                            subtitle = "学校原版网页",
-                            onOpen = onOpenLibrary,
-                        )
+                        GlassListCard {
+                            GlassListRow(Icons.Outlined.LocalLibrary, "图书馆 · 座位预约", "学校原版网页", onClick = onOpenLibrary)
+                        }
 
                     TodayModules.TODAY_MODULE_ROOMS ->
-                        LibraryEntryCard(
-                            icon = Icons.Filled.MeetingRoom,
-                            title = "空教室查询",
-                            subtitle = "按楼看每间教室哪节有课",
-                            onOpen = onOpenRooms,
-                        )
+                        GlassListCard {
+                            GlassListRow(Icons.Outlined.MeetingRoom, "空教室查询", "按楼看每间教室哪节有课", onClick = onOpenRooms)
+                        }
 
                     TodayModules.TODAY_MODULE_ELECTRICITY ->
-                        // ③ 宿舍电量（底部带"近 7 天"摘要行，完整的趋势图在电费页）
                         ElectricityCard(
                             state = state,
                             onRefresh = vm::refresh,
@@ -190,9 +267,9 @@ fun TodayScreen(
                         )
 
                     TodayModules.TODAY_MODULE_CARD ->
-                        // ④ 校园卡：余额 + 今日消费
                         TodayCardBalanceCard(state = card, onOpen = onOpenCard)
                 }
+                idx += 1
             }
 
             Spacer(Modifier.height(4.dp))
@@ -211,6 +288,80 @@ fun TodayScreen(
             },
         )
     }
+
+    if (showCountdownSheet) {
+        CountdownManagerSheet(
+            items = countdownItems,
+            onSave = { item -> scope.launch { AppGraph.countdownRepository.save(item) } },
+            onDelete = { id -> scope.launch { AppGraph.countdownRepository.delete(id) } },
+            onTogglePin = { item -> scope.launch { AppGraph.countdownRepository.togglePinned(item) } },
+            onDismiss = { showCountdownSheet = false },
+        )
+    }
+}
+
+/** 首页番茄专注快捷入口卡 */
+@Composable
+private fun TodayFocusQuickCard(
+    timerUi: TimerUi,
+    focusSeconds: Int,
+    focusCount: Int,
+    onOpenFocus: () -> Unit,
+) {
+    val active = !timerUi.idle
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onOpenFocus,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (active) {
+                            "${timerUi.phase.label} · ${PomodoroClock.format(timerUi.remainingSeconds)}"
+                        } else {
+                            "番茄专注"
+                        },
+                        style = MaterialTheme.typography.titleMedium.tabularNumbers(),
+                    )
+                    if (active) {
+                        Spacer(Modifier.width(8.dp))
+                        StatusPill(
+                            text = if (timerUi.running) "计时中" else "已暂停",
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Text(
+                    text = if (focusSeconds > 0) {
+                        "今日累计 ${FocusStats.humanDuration(focusSeconds)} · $focusCount 个番茄"
+                    } else {
+                        "点按进入计时器，支持课程关联专注"
+                    },
+                    style = MaterialTheme.typography.bodySmall.tabularNumbers(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (active) "查看" else "开始",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(2.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
 }
 
 /**
@@ -227,7 +378,10 @@ private fun TodayModuleEditorSheet(
     // 本地编辑态：确认时才落盘
     val items = remember(layout) { mutableStateListOf<Pair<String, Boolean>>().apply { addAll(layout) } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = com.zzupocket.app.ui.components.liquidGlassSheetContainerColor(),
+    ) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             Text("自定义首页模块", style = MaterialTheme.typography.titleLarge)
             Text(
@@ -279,7 +433,7 @@ private fun TodayModuleEditorSheet(
                     }
                 }
             }
-            Button(
+            LiquidGlassButton(
                 onClick = { onSave(items.map { it.first }, items.filter { !it.second }.map { it.first }.toSet()) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) { Text("保存") }
@@ -296,17 +450,12 @@ private fun SnapshotStateList<Pair<String, Boolean>>.move(from: Int, to: Int) {
 
 @Composable
 private fun LoginPromptCard(onOpenLogin: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("未登录", style = MaterialTheme.typography.titleMedium)
             Text("登录后可以查看电费、校园卡、课表与图书馆。", style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onOpenLogin) {
-                Icon(Icons.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+            LiquidGlassButton(onClick = onOpenLogin) {
+                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
                 Text("登录")
             }
@@ -323,7 +472,7 @@ private fun ElectricityCard(
 ) {
     val allEmpty = state.light.kwh == null && state.ac.kwh == null
 
-    GlassCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -334,7 +483,12 @@ private fun ElectricityCard(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
                 } else {
                     IconButton(onClick = onRefresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "刷新",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 }
             }
@@ -346,7 +500,7 @@ private fun ElectricityCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (!state.loggedIn) {
-                    OutlinedButton(onClick = onOpenLogin) { Text("去登录") }
+                    LiquidGlassOutlinedButton(onClick = onOpenLogin) { Text("去登录") }
                 }
                 return@Column
             }
@@ -386,10 +540,12 @@ private fun ElectricityCard(
                     Spacer(Modifier.weight(1f))
                     val newest = listOfNotNull(state.light.fetchedAt, state.ac.fetchedAt).maxOrNull()
                     val oldest = listOfNotNull(state.light.fetchedAt, state.ac.fetchedAt).minOrNull()
+                    val newestText = newest?.let { TIME_FMT.format(Date(it)) }
+                    val oldestText = oldest?.let { TIME_FMT.format(Date(it)) }
                     val label = when {
-                        newest == null -> "尚无数据"
-                        oldest == null || newest == oldest -> "数据截至 ${TIME_FMT.format(Date(newest))}"
-                        else -> "数据截至 ${TIME_FMT.format(Date(oldest))} ~ ${TIME_FMT.format(Date(newest))}"
+                        newestText == null -> "尚无数据"
+                        oldestText == null || oldestText == newestText -> "数据截至 $newestText"
+                        else -> "数据截至 $oldestText ~ $newestText"
                     }
                     Text(
                         text = label,
@@ -474,45 +630,6 @@ private fun MeterRow(icon: ImageVector, label: String, meter: MeterUi) {
 
 private fun formatKwh(v: Double): String =
     if (v == v.toLong().toDouble()) v.toLong().toString() else String.format(Locale.US, "%.2f", v)
-
-/**
- * 快速入口卡（今天页）：一行紧凑卡，「更多」页 Entry 的首页变体。不做多余装饰。
- */
-@Composable
-private fun LibraryEntryCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onOpen: () -> Unit,
-) {
-    GlassCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.weight(1f))
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
 
 /**
  * 7 天用电迷你柱：照明（主色）在上、空调（第三色）在下，双色堆叠、无轴无标签。

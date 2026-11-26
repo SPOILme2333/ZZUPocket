@@ -113,6 +113,11 @@ class TokenStore(context: Context) {
         get() = prefs.getLong(KEY_NOX_AUTH_AT, 0L)
         set(value) = prefs.edit().putLong(KEY_NOX_AUTH_AT, value).apply()
 
+    /** 可选 BYOK AI 摘要密钥（仅加密保存在本地） */
+    var aiApiKey: String?
+        get() = prefs.getString(KEY_AI_API_KEY, null)
+        set(value) = prefs.edit().putString(KEY_AI_API_KEY, value).apply()
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }
@@ -133,5 +138,6 @@ class TokenStore(context: Context) {
         private const val KEY_NOX_ACCOUNT = "nox_account"
         private const val KEY_NOX_PASSWORD = "nox_password"
         private const val KEY_NOX_AUTH_AT = "nox_auth_at"
+        private const val KEY_AI_API_KEY = "ai_api_key"
     }
 }

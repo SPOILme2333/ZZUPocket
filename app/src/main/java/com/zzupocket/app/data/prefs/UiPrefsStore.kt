@@ -17,6 +17,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 
 /** 课程格里显示哪些内容（老师不在这里显示：点开课程详情能看到，格子太小放不下） */
 enum class CourseTextMode {
@@ -55,13 +56,26 @@ enum class DarkMode { SYSTEM, LIGHT, DARK }
 enum class DarkContrast { STANDARD, MEDIUM, HIGH }
 
 /**
+ * 全应用液态玻璃通透度档位。
+ */
+enum class GlassStyle {
+    /** 晶莹高透：背景极光清晰透射，水滴级空气感（默认） */
+    CRYSTAL,
+    /** 均衡液态：玻璃柔光与可读性平衡 */
+    BALANCED,
+    /** 柔雾磨砂：较浓磨砂质感 */
+    FROSTED,
+}
+
+/**
  * 全应用配色预设。
  *
- * [DYNAMIC] = 跟随系统壁纸的动态取色（最接近原生 Android 的默认观感）；
- * 其余每一项都是**一个种子色**，由 Material 3 算法（HCT）算出整套浅/深配色，
- * 所以颜色之间的关系是"原生那套"，而不是随手挑的色。
+ * [ZZU] = 郑州大学官方标准校色（郑大红，默认）；
+ * [DYNAMIC] = 跟随系统壁纸的动态取色；[CUSTOM] = 用户在调色盘自由选取的 RGB/HSV 主题色；
+ * 其余为原仓库经典精选种子色，由 Material 3 HCT 算法自动推算协调的三色色板。
  */
 enum class ThemePreset(val seedArgb: Int?) {
+    ZZU(0xFF223C3B.toInt()),
     DYNAMIC(null),
     PURPLE(0xFF6750A4.toInt()),
     BLUE(0xFF1A73E8.toInt()),
@@ -70,12 +84,13 @@ enum class ThemePreset(val seedArgb: Int?) {
     AMBER(0xFFE8710A.toInt()),
     PINK(0xFFD81B60.toInt()),
     GRAPHITE(0xFF546E7A.toInt()),
+    CUSTOM(null),
 }
 
 data class UiPrefs(
     /** 是否显示周六周日（关掉就是只显示工作日 5 列，列宽更宽、字更大） */
     val showWeekend: Boolean = true,
-    val blockBorder: BlockBorder = BlockBorder.DASHED,
+    val blockBorder: BlockBorder = BlockBorder.SOLID,
     val courseTextMode: CourseTextMode = CourseTextMode.NAME_ROOM,
     val density: GridDensity = GridDensity.STANDARD,
     /** "正在上的课"描边高亮 —— 借鉴 Sked 的 liveCourseOutline */
@@ -106,8 +121,14 @@ data class UiPrefs(
     val energyPricePerKwh: Float = 0.568f,
     /** 每次换图 +1，用来让内存里的位图缓存失效 */
     val backgroundVersion: Int = 0,
-    /** 全应用配色预设（默认跟随系统壁纸动态取色） */
-    val themePreset: ThemePreset = ThemePreset.DYNAMIC,
+    /** 全应用配色预设（默认郑大校徽双色，也可切换跟随系统壁纸、原仓库经典色系或自定义色） */
+    val themePreset: ThemePreset = ThemePreset.ZZU,
+    /** 用户自定义主题主色 ARGB */
+    val customThemeSeedArgb: Int = 0xFF223C3B.toInt(),
+    /** 色彩性格风格（SchemeVariant 枚举名，默认 TONAL_SPOT 标准协调三色组） */
+    val schemeVariantName: String = "TONAL_SPOT",
+    /** 全应用液态玻璃通透度档位（默认 CRYSTAL 晶莹高透） */
+    val glassStyle: GlassStyle = GlassStyle.CRYSTAL,
     /** 深浅色（默认跟随系统） */
     val darkMode: DarkMode = DarkMode.SYSTEM,
     /** 深色对比度（只在深色下生效，默认标准 = 系统原生观感） */
@@ -184,6 +205,20 @@ data class UiPrefs(
      * 时间轴是首页的核心，不在可隐藏之列。
      */
     val todayModulesHidden: Set<String> = emptySet(),
+    /** 智能精简超长公共课名称（如“高等数学”→“高数”） */
+    val smartShortCourseName: Boolean = true,
+    /** 上课前通知提醒开关与提前分钟数 */
+    val classReminderEnabled: Boolean = false,
+    val classReminderMinutes: Int = 15,
+    val classReminderLastFiredKey: String? = null,
+    /** 宿舍低电量预警开关与阈值度数 */
+    val lowEnergyAlertEnabled: Boolean = false,
+    val lowEnergyThresholdKwh: Int = 10,
+    val lowEnergyLastAlertAt: Long = 0L,
+    /** 校园资讯可选 BYOK AI 摘要配置 */
+    val aiSummaryEnabled: Boolean = false,
+    val aiBaseUrl: String = "https://api.deepseek.com/v1",
+    val aiModel: String = "deepseek-chat",
 ) {
     val dayCount: Int get() = if (showWeekend) 7 else 5
 
@@ -215,11 +250,16 @@ class UiPrefsStore(context: Context) {
 
     private val store = context.applicationContext.uiPrefsStore
 
+    /** 最近一次从 DataStore 读出的偏好内存快照，避免新页面首帧回退到 UiPrefs() 造成浅色模式闪黑 */
+    @Volatile
+    var latest: UiPrefs = UiPrefs()
+        private set
+
     val flow: Flow<UiPrefs> = store.data.map { p ->
         UiPrefs(
             showWeekend = p[KEY_SHOW_WEEKEND] ?: true,
             blockBorder = p[KEY_BLOCK_BORDER]?.let { runCatching { BlockBorder.valueOf(it) }.getOrNull() }
-                ?: BlockBorder.DASHED,
+                ?: BlockBorder.SOLID,
             courseTextMode = p[KEY_TEXT_MODE]
                 ?.let { runCatching { CourseTextMode.valueOf(it) }.getOrNull() }
                 ?.takeIf { it != CourseTextMode.NAME_TEACHER_ROOM }   // 老设置自动降级
@@ -239,7 +279,11 @@ class UiPrefsStore(context: Context) {
             energyPricePerKwh = p[KEY_ENERGY_PRICE] ?: 0.568f,
             backgroundVersion = p[KEY_BG_VERSION] ?: 0,
             themePreset = p[KEY_THEME_PRESET]?.let { runCatching { ThemePreset.valueOf(it) }.getOrNull() }
-                ?: ThemePreset.DYNAMIC,
+                ?: ThemePreset.ZZU,
+            customThemeSeedArgb = p[KEY_CUSTOM_THEME_SEED] ?: 0xFF223C3B.toInt(),
+            schemeVariantName = p[KEY_SCHEME_VARIANT]?.takeIf { it.isNotBlank() } ?: "TONAL_SPOT",
+            glassStyle = p[KEY_GLASS_STYLE]?.let { runCatching { GlassStyle.valueOf(it) }.getOrNull() }
+                ?: GlassStyle.CRYSTAL,
             darkMode = p[KEY_DARK_MODE]?.let { runCatching { DarkMode.valueOf(it) }.getOrNull() }
                 ?: DarkMode.SYSTEM,
             darkContrast = p[KEY_DARK_CONTRAST]?.let { runCatching { DarkContrast.valueOf(it) }.getOrNull() }
@@ -264,8 +308,18 @@ class UiPrefsStore(context: Context) {
             todayModuleOrder = p[KEY_TODAY_MODULE_ORDER]?.split(',')?.filter { it.isNotBlank() } ?: emptyList(),
             todayModulesHidden = p[KEY_TODAY_MODULES_HIDDEN]?.split(',')?.filter { it.isNotBlank() }?.toSet()
                 ?: emptySet(),
+            smartShortCourseName = p[KEY_SMART_SHORT_COURSE] ?: true,
+            classReminderEnabled = p[KEY_CLASS_REMINDER_ENABLED] ?: false,
+            classReminderMinutes = (p[KEY_CLASS_REMINDER_MINUTES] ?: 15).coerceIn(5, 60),
+            classReminderLastFiredKey = p[KEY_CLASS_REMINDER_LAST_FIRED]?.takeIf { it.isNotBlank() },
+            lowEnergyAlertEnabled = p[KEY_LOW_ENERGY_ALERT_ENABLED] ?: false,
+            lowEnergyThresholdKwh = (p[KEY_LOW_ENERGY_THRESHOLD] ?: 10).coerceIn(5, 50),
+            lowEnergyLastAlertAt = p[KEY_LOW_ENERGY_LAST_ALERT_AT] ?: 0L,
+            aiSummaryEnabled = p[KEY_AI_SUMMARY_ENABLED] ?: false,
+            aiBaseUrl = p[KEY_AI_BASE_URL]?.takeIf { it.isNotBlank() } ?: "https://api.deepseek.com/v1",
+            aiModel = p[KEY_AI_MODEL]?.takeIf { it.isNotBlank() } ?: "deepseek-chat",
         )
-    }
+    }.onEach { latest = it }
 
     /** 「不再提醒」该版本的红点；传 null 清掉全部屏蔽（给设置里未来可能的"重新开启提醒"用） */
     suspend fun setUpdateMutedVersion(v: String?) =
@@ -303,6 +357,15 @@ class UiPrefsStore(context: Context) {
     suspend fun setWallpaperNavBar(v: Boolean) = store.edit { p -> p[KEY_BG_NAVBAR] = v }
 
     suspend fun setThemePreset(v: ThemePreset) = store.edit { p -> p[KEY_THEME_PRESET] = v.name }
+
+    suspend fun setCustomThemeSeed(argb: Int) = store.edit { p ->
+        p[KEY_CUSTOM_THEME_SEED] = argb
+        p[KEY_THEME_PRESET] = ThemePreset.CUSTOM.name
+    }
+
+    suspend fun setSchemeVariant(name: String) = store.edit { p -> p[KEY_SCHEME_VARIANT] = name }
+
+    suspend fun setGlassStyle(v: GlassStyle) = store.edit { p -> p[KEY_GLASS_STYLE] = v.name }
 
     suspend fun setDarkMode(v: DarkMode) = store.edit { p -> p[KEY_DARK_MODE] = v.name }
 
@@ -349,6 +412,33 @@ class UiPrefsStore(context: Context) {
     suspend fun setTodayModules(order: List<String>, hidden: Set<String>) = store.edit { p ->
         p[KEY_TODAY_MODULE_ORDER] = order.joinToString(",")
         p[KEY_TODAY_MODULES_HIDDEN] = hidden.joinToString(",")
+    }
+
+    suspend fun setSmartShortCourseName(v: Boolean) = store.edit { it[KEY_SMART_SHORT_COURSE] = v }
+
+    suspend fun setClassReminder(enabled: Boolean, minutes: Int? = null) = store.edit { p ->
+        p[KEY_CLASS_REMINDER_ENABLED] = enabled
+        if (minutes != null) p[KEY_CLASS_REMINDER_MINUTES] = minutes.coerceIn(5, 60)
+    }
+
+    suspend fun setClassReminderLastFiredKey(key: String?) = store.edit { p ->
+        if (key.isNullOrBlank()) p.remove(KEY_CLASS_REMINDER_LAST_FIRED)
+        else p[KEY_CLASS_REMINDER_LAST_FIRED] = key
+    }
+
+    suspend fun setLowEnergyAlert(enabled: Boolean, thresholdKwh: Int? = null) = store.edit { p ->
+        p[KEY_LOW_ENERGY_ALERT_ENABLED] = enabled
+        if (thresholdKwh != null) p[KEY_LOW_ENERGY_THRESHOLD] = thresholdKwh.coerceIn(5, 50)
+    }
+
+    suspend fun setLowEnergyLastAlertAt(atMillis: Long) = store.edit { p ->
+        p[KEY_LOW_ENERGY_LAST_ALERT_AT] = atMillis
+    }
+
+    suspend fun setAiConfig(enabled: Boolean, baseUrl: String, model: String) = store.edit { p ->
+        p[KEY_AI_SUMMARY_ENABLED] = enabled
+        p[KEY_AI_BASE_URL] = baseUrl.trim()
+        p[KEY_AI_MODEL] = model.trim()
     }
 
     /**
@@ -462,6 +552,9 @@ class UiPrefsStore(context: Context) {
         val KEY_ENERGY_PRICE = floatPreferencesKey("energy_price_per_kwh")
         val KEY_BG_VERSION = intPreferencesKey("grid_bg_version")
         val KEY_THEME_PRESET = stringPreferencesKey("theme_preset")
+        val KEY_CUSTOM_THEME_SEED = intPreferencesKey("custom_theme_seed_argb")
+        val KEY_SCHEME_VARIANT = stringPreferencesKey("scheme_variant")
+        val KEY_GLASS_STYLE = stringPreferencesKey("glass_style")
         val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
         val KEY_DARK_CONTRAST = stringPreferencesKey("dark_contrast")
         val KEY_DARK_TINTED = booleanPreferencesKey("dark_tinted")
@@ -484,6 +577,16 @@ class UiPrefsStore(context: Context) {
         val KEY_UPDATE_MUTED = stringPreferencesKey("update_muted_version")
         val KEY_TODAY_MODULE_ORDER = stringPreferencesKey("today_module_order")
         val KEY_TODAY_MODULES_HIDDEN = stringPreferencesKey("today_modules_hidden")
+        val KEY_SMART_SHORT_COURSE = booleanPreferencesKey("smart_short_course_name")
+        val KEY_CLASS_REMINDER_ENABLED = booleanPreferencesKey("class_reminder_enabled")
+        val KEY_CLASS_REMINDER_MINUTES = intPreferencesKey("class_reminder_minutes")
+        val KEY_CLASS_REMINDER_LAST_FIRED = stringPreferencesKey("class_reminder_last_fired")
+        val KEY_LOW_ENERGY_ALERT_ENABLED = booleanPreferencesKey("low_energy_alert_enabled")
+        val KEY_LOW_ENERGY_THRESHOLD = intPreferencesKey("low_energy_threshold_kwh")
+        val KEY_LOW_ENERGY_LAST_ALERT_AT = androidx.datastore.preferences.core.longPreferencesKey("low_energy_last_alert_at")
+        val KEY_AI_SUMMARY_ENABLED = booleanPreferencesKey("ai_summary_enabled")
+        val KEY_AI_BASE_URL = stringPreferencesKey("ai_base_url")
+        val KEY_AI_MODEL = stringPreferencesKey("ai_model")
 
         /** 旧版（0.31.6 及以前）研究生周次锚点：只保留键名用于一次性清理 */
         val KEY_GMS_WEEK_ONE = androidx.datastore.preferences.core.longPreferencesKey("gms_week_one_epoch_day")

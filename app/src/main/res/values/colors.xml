@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#FFFBFE</color>
-    <!-- 启动器图标桌面背景（浅色模式，纸白，配合 G1 日版前景）；深色模式覆盖在 values-night/colors.xml -->
-    <color name="ic_launcher_background">#F7F7F4</color>
+    <!-- 启动器图标桌面背景（纯白底配校徽自适应前景） -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 
     <!--
       桌面小组件的配色。

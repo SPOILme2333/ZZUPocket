@@ -1,9 +1,13 @@
 package com.zzupocket.app.ui.schedule
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +25,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -75,6 +80,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -89,6 +95,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zzupocket.app.core.AppGraph
+import com.zzupocket.app.core.CourseShortener
 import com.zzupocket.app.core.ScheduleText
 import com.zzupocket.app.core.WeekMath
 import com.zzupocket.app.data.gms.GmsScheduleSource
@@ -102,13 +109,14 @@ import com.zzupocket.app.domain.Course
 import com.zzupocket.app.domain.ConflictDisplayChoice
 import com.zzupocket.app.domain.ScheduleBlock
 import com.zzupocket.app.domain.scheduleBlocks
-import com.zzupocket.app.domain.FocusRecord
-import com.zzupocket.app.domain.FocusStats
 import com.zzupocket.app.domain.Period
 import com.zzupocket.app.domain.Phase
 import com.zzupocket.app.domain.Semester
 import com.zzupocket.app.domain.Session
-import com.zzupocket.app.domain.toSlotLines
+import com.zzupocket.app.ui.components.LiquidGlassIconButton
+import com.zzupocket.app.ui.components.glassClickable
+import com.zzupocket.app.ui.nav.DOCK_CLEARANCE
+import com.zzupocket.app.ui.theme.tabularNumbers
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -124,7 +132,7 @@ fun ScheduleScreen(
     vm: ScheduleViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = UiPrefs())
+    val prefs by AppGraph.uiPrefsStore.flow.collectAsStateWithLifecycle(initialValue = AppGraph.uiPrefsStore.latest)
     var showSemesters by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
 
@@ -139,26 +147,54 @@ fun ScheduleScreen(
                 // 左上角不显示"课表"二字，直接放学期切换；研究生视图显示研究生学期名
                 title = {
                     if (state.gradMode) {
-                        Text(
-                            text = state.gmsSemester?.displayName ?: "研究生课表",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
+                        val (year, term) = splitSemesterHeader(state.gmsSemester?.displayName ?: "研究生课表")
+                        Column(verticalArrangement = Arrangement.spacedBy((-1).dp)) {
+                            if (year != null) {
+                                Text(
+                                    text = year,
+                                    style = MaterialTheme.typography.labelSmall.tabularNumbers(),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
+                            Text(
+                                text = term,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
                     } else {
                         SemesterButton(state.selectedSemester) { showSemesters = true }
                     }
                 },
                 actions = {
-                    if (!state.gradMode) {
-                        IconButton(onClick = { vm.openPlanEditor() }) {
-                            Icon(Icons.Filled.Add, contentDescription = "添加日程")
+                    Row(
+                        modifier = Modifier.padding(end = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!state.gradMode) {
+                            LiquidGlassIconButton(
+                                icon = Icons.Filled.Add,
+                                contentDescription = "添加日程",
+                                onClick = { vm.openPlanEditor() },
+                            )
                         }
-                    }
-                    IconButton(onClick = { if (state.gradMode) vm.loadGmsWeek(force = true) else vm.refresh() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新课表")
-                    }
-                    // 顶栏只留一个设置入口：教学周、显示、背景、入学年、课程总览都在里面
-                    IconButton(onClick = onOpenDisplaySettings) {
-                        Icon(Icons.Filled.Tune, contentDescription = "课程表设置")
+                        LiquidGlassIconButton(
+                            icon = Icons.Filled.Refresh,
+                            contentDescription = "刷新课表",
+                            onClick = { if (state.gradMode) vm.loadGmsWeek(force = true) else vm.refresh() },
+                        )
+                        // 顶栏只留一个设置入口：教学周、显示、背景、入学年、课程总览都在里面
+                        LiquidGlassIconButton(
+                            icon = Icons.Filled.Tune,
+                            contentDescription = "课程表设置",
+                            onClick = onOpenDisplaySettings,
+                        )
                     }
                 },
             )
@@ -190,17 +226,13 @@ fun ScheduleScreen(
                 )
             }
             state.cacheNotice?.let { msg ->
-                Text(
-                    text = msg,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            // 登录过期 → 点它去重新登录（重试是没用的，只会再失败一次）；
-                            // 其他失败（网络/教务挂了）→ 重试
                             if (state.cacheNoticeNeedsLogin) {
-                                vm.openGmsLogin()
+                                if (state.gradMode) vm.openGmsLogin() else onOpenLogin()
                             } else if (state.gradMode) {
                                 vm.loadGmsWeek(force = true)
                             } else {
@@ -208,7 +240,20 @@ fun ScheduleScreen(
                             }
                         }
                         .padding(horizontal = 16.dp, vertical = 2.dp),
-                )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiary),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = msg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             state.notice?.let { msg ->
@@ -435,19 +480,61 @@ private fun startFocusFor(name: String, contextRef: String) {
     )
 }
 
+/** 将「2026-2027 第一学期」拆分为上行小字学年与下行大字学期名，避免窄屏被省略号截断。 */
+internal fun splitSemesterHeader(displayName: String): Pair<String?, String> {
+    val trimmed = displayName.trim()
+    val spaceMatch = Regex("^(\\d{4}-\\d{4})\\s+(.+)$").find(trimmed)
+    if (spaceMatch != null) {
+        return spaceMatch.groupValues[1] to spaceMatch.groupValues[2]
+    }
+    val dashMatch = Regex("^(\\d{4}-\\d{4})-(\\d+)$").find(trimmed)
+    if (dashMatch != null) {
+        val term = when (dashMatch.groupValues[2]) {
+            "1" -> "第一学期"
+            "2" -> "第二学期"
+            "3" -> "第三学期"
+            else -> "第${dashMatch.groupValues[2]}学期"
+        }
+        return dashMatch.groupValues[1] to term
+    }
+    return null to trimmed
+}
+
 @Composable
 private fun SemesterButton(semester: Semester?, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
+    val (year, term) = splitSemesterHeader(semester?.displayName ?: "选择学期")
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .glassClickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy((-1).dp),
     ) {
-        Text(
-            text = semester?.displayName ?: "选择学期",
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(Icons.Filled.ArrowDropDown, contentDescription = "切换学期")
+        if (year != null) {
+            Text(
+                text = year,
+                style = MaterialTheme.typography.labelSmall.tabularNumbers(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = term,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "切换学期",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -469,21 +556,20 @@ private fun WeekHeader(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onPick),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable(onClick = onPick),
-            ) {
-                // 只留周次。原来下面还有一行「9/21 - 9/27」的日期区间，用户要求删掉 ——
-                // "这是哪几天"改由星期表头下面那行日期回答（每一列都有，翻到哪一周都看得出来）。
-                // 也刻意不再显示「9/7 起」：用户觉得表头上挂基准日太啰嗦，基准改到设置页里看。
-                Text(
-                    text = "第 $week 周 / 共 $total 周",
-                    style = MaterialTheme.typography.titleMedium.copy(shadow = shadow),
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+            Text(
+                text = "第 $week 周",
+                style = MaterialTheme.typography.titleMedium.copy(shadow = shadow),
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = " / $total",
+                style = MaterialTheme.typography.bodyMedium.copy(shadow = shadow),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (!confirmed && onOpenSettings != null) {
             // 只在"周次是自动猜的、还没确认"时出现，确认后永久消失。
@@ -594,26 +680,39 @@ internal fun ScheduleGrid(
         MaterialTheme.colorScheme.surface,
     )
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val compactWidth = LocalConfiguration.current.screenWidthDp < 360
+    val unitColWidth = if (compactWidth) 42.dp else 52.dp
 
     // ⚠️ 表头**不放在可滚动区里**：往下翻课表时"周几 + 日期"要一直看得见
     // （用户要求固定住；它只是一行普通 Row，不吃横向拖动，所以左右翻周的手感不受影响）。
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().height(WEEKDAY_HEADER_HEIGHT)) {
-            Spacer(Modifier.width(UNIT_COL_WIDTH))
+            Spacer(Modifier.width(unitColWidth))
             for (d in days) {
                 val date = weekMonday?.plusDays((d - 1).toLong())
                 val isToday = date != null && date == today
+                val todayPillMod = if (isToday) {
+                    Modifier
+                        .padding(horizontal = 4.dp, vertical = 3.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                } else {
+                    Modifier
+                }
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(todayPillMod),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
                         text = ScheduleText.weekdayName(d).removePrefix("周"),
                         style = MaterialTheme.typography.labelMedium.copy(shadow = labelShadow),
-                        color = labelColor,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimary else labelColor,
+                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                     )
-                    // 日期：10-01 这种写法（带月份、补零）。今天那一列用主色 + 加粗标出来
+                    // 日期：10-01 这种写法（带月份、补零）。今天那一列用主色块 + 白字标出来
                     if (date != null) {
                         Text(
                             text = ScheduleText.dayLabel(date),
@@ -621,7 +720,7 @@ internal fun ScheduleGrid(
                             lineHeight = 11.sp,
                             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                             color = if (isToday) {
-                                MaterialTheme.colorScheme.primary
+                                MaterialTheme.colorScheme.onPrimary
                             } else {
                                 labelColor
                             },
@@ -633,38 +732,39 @@ internal fun ScheduleGrid(
         }
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            val gridLine = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            val gridLine = if (dark) {
+                Color.White.copy(alpha = 0.055f)
+            } else {
+                Color(0xFF0F172A).copy(alpha = 0.045f)
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().drawBehind {
-                    val unitW = UNIT_COL_WIDTH.toPx()
+                    val unitW = unitColWidth.toPx()
                     val rowH = cellH.toPx()
                     val gapPx = gap.toPx()
-                    val stroke = 0.7.dp.toPx()
-                    val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
-                    // 横向虚线：每节课的上边界 + 最后一节的下边界
+                    val stroke = 0.55.dp.toPx()
+                    // 极轻柔的玻璃刻痕线：横竖分隔格线
                     for (i in 0 until 10) {
                         val y = (rowH + gapPx) * i
-                        drawLine(gridLine, Offset(0f, y), Offset(size.width, y), stroke, pathEffect = dash)
+                        drawLine(gridLine, Offset(0f, y), Offset(size.width, y), stroke)
                     }
                     drawLine(
                         gridLine,
                         Offset(0f, size.height),
                         Offset(size.width, size.height),
                         stroke,
-                        pathEffect = dash,
                     )
-                    // 纵向虚线：时间列与各天之间
                     val dayCount = days.count()
                     val dayW = (size.width - unitW) / dayCount
                     for (i in 0..dayCount) {
                         val x = unitW + dayW * i
-                        drawLine(gridLine, Offset(x, 0f), Offset(x, size.height), stroke, pathEffect = dash)
+                        drawLine(gridLine, Offset(x, 0f), Offset(x, size.height), stroke)
                     }
                 },
             ) {
                 // 左侧节次列：固定 10 格，与右侧各天严格对齐
                 Column(
-                    modifier = Modifier.width(UNIT_COL_WIDTH),
+                    modifier = Modifier.width(unitColWidth),
                     verticalArrangement = Arrangement.spacedBy(gap),
                 ) {
                     for (unit in 1..10) {
@@ -678,16 +778,37 @@ internal fun ScheduleGrid(
                                 style = MaterialTheme.typography.labelMedium.copy(shadow = labelShadow),
                             )
                             periods.firstOrNull { it.indexNo == unit }?.let {
-                                // 起止放在同一行，避免行高不够时和时间数字叠在一起
-                                Text(
-                                    text = "${it.startText}-${it.endText}",
-                                    fontSize = 7.sp,
-                                    lineHeight = 9.sp,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    color = labelColor,
-                                    style = LocalTextStyle.current.copy(shadow = labelShadow),
-                                )
+                                if (compactWidth) {
+                                    Text(
+                                        text = it.startText,
+                                        fontSize = 7.5.sp,
+                                        lineHeight = 8.5.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        color = labelColor,
+                                        style = LocalTextStyle.current.copy(shadow = labelShadow),
+                                    )
+                                    Text(
+                                        text = it.endText,
+                                        fontSize = 7.5.sp,
+                                        lineHeight = 8.5.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        color = labelColor,
+                                        style = LocalTextStyle.current.copy(shadow = labelShadow),
+                                    )
+                                } else {
+                                    // 起止放在同一行，避免行高不够时和时间数字叠在一起
+                                    Text(
+                                        text = "${it.startText}-${it.endText}",
+                                        fontSize = 7.sp,
+                                        lineHeight = 9.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        color = labelColor,
+                                        style = LocalTextStyle.current.copy(shadow = labelShadow),
+                                    )
+                                }
                             }
                         }
                     }
@@ -708,11 +829,12 @@ internal fun ScheduleGrid(
                         now = now,
                         conflictChoices = conflictChoices,
                         scopeKey = scopeKey,
+                        compactWidth = compactWidth,
                         onBlockClick = onBlockClick,
                     )
                 }
             }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(DOCK_CLEARANCE))
         } // 关闭可滚动区（表头在上面，不跟着滚）
     } // 关闭外层 Column
 } // 关闭 ScheduleGrid
@@ -737,9 +859,10 @@ private fun DayColumn(
     now: LocalTime,
     conflictChoices: List<ConflictDisplayChoice>,
     scopeKey: String? = null,
+    compactWidth: Boolean = false,
     onBlockClick: (ScheduleBlock) -> Unit,
 ) {
-    val corner = RoundedCornerShape(6.dp)
+    val corner = RoundedCornerShape(8.dp)
     val blocks = remember(sessions, day, conflictChoices, scopeKey) {
         scheduleBlocks(sessions.filter { it.weekday == day }, conflictChoices, scopeKey = scopeKey).associateBy { it.startUnit }
     }
@@ -767,6 +890,7 @@ private fun DayColumn(
                         isLiveNow(it.copy(startUnit = block.startUnit, endUnit = block.endUnit), periods, todayIso, now)
                     },
                 conflict = block.takeIf { it.isConflict },
+                compactWidth = compactWidth,
                 onClick = { onBlockClick(block) },
             )
             unit += span
@@ -785,38 +909,69 @@ private fun CourseBlock(
     dark: Boolean,
     live: Boolean,
     conflict: ScheduleBlock? = null,
+    compactWidth: Boolean = false,
     onClick: (Session) -> Unit,
 ) {
     val placeholder = conflict?.showPlaceholder == true
-    val bg = when {
-        // 冲突是状态，独立于课程代码与单色偏好；只在未选择显示课程时突出。
-        placeholder -> MaterialTheme.colorScheme.errorContainer
-        // 普通自定义日程用用户自己挑的颜色，不受"课程配色"设置影响 ——
-        // 挑完就得一直是他挑的那个色，不能被"单色模式"改掉
+    val accent = when {
+        placeholder -> MaterialTheme.colorScheme.error
         session.source == ScheduleRepository.SOURCE_CUSTOM ->
-            planBlockColor(session.color, dark)
-        prefs.colorMode == CourseColorMode.SINGLE -> MaterialTheme.colorScheme.secondaryContainer
+            planBlockColor(session.color, dark = false)
+        prefs.colorMode == CourseColorMode.SINGLE -> MaterialTheme.colorScheme.primary
         else -> courseColor(session.courseCode, dark)
     }
-    // 「正在上的课」描边（借鉴 Sked 的 liveCourseOutline）；否则按设置画实线/虚线/不画
+
+    // 克制低彩纸釉课程块材质：去除刺眼渐变高光与白色边缘，确保深浅模式下均沉稳易读
+    val baseSurface = remember(accent, dark, placeholder) {
+        if (dark) {
+            lerp(Color(0xFF151C1B), accent, if (placeholder) 0.34f else 0.30f).copy(alpha = 0.86f)
+        } else {
+            lerp(Color(0xFFF7F8F6), accent, if (placeholder) 0.22f else 0.17f).copy(alpha = 0.90f)
+        }
+    }
+    val titleColor = remember(accent, dark) {
+        if (dark) lerp(accent, Color.White, 0.86f) else lerp(accent, Color(0xFF121716), 0.58f)
+    }
+    val roomColor = remember(titleColor) {
+        titleColor.copy(alpha = 0.70f)
+    }
+
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val errorColor = MaterialTheme.colorScheme.error
     val decoration = when {
         placeholder -> Modifier.border(
-            (if (live) maxOf(2, prefs.liveOutlineWidth) else 2).dp,
-            MaterialTheme.colorScheme.error,
+            BorderStroke(
+                1.4.dp,
+                errorColor.copy(alpha = 0.75f),
+            ),
             corner,
         )
-        live -> Modifier.border(prefs.liveOutlineWidth.dp, MaterialTheme.colorScheme.primary, corner)
-        prefs.blockBorder == BlockBorder.SOLID ->
-            Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, corner)
+        live -> Modifier.border(
+            BorderStroke(
+                1.5.dp,
+                tertiary.copy(alpha = 0.90f),
+            ),
+            corner,
+        )
+        prefs.blockBorder == BlockBorder.SOLID -> Modifier.border(
+            BorderStroke(
+                0.6.dp,
+                accent.copy(alpha = if (dark) 0.30f else 0.22f),
+            ),
+            corner,
+        )
         prefs.blockBorder == BlockBorder.DASHED ->
-            Modifier.dashedBorder(MaterialTheme.colorScheme.outline)
+            Modifier.dashedBorder(accent.copy(alpha = 0.35f))
         else -> Modifier
     }
+    val hasCornerBadge = !placeholder && (session.experiment || conflict != null)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .background(bg, corner)
+            .padding(horizontal = if (compactWidth) 1.5.dp else 2.dp, vertical = 1.5.dp)
+            .clip(corner)
+            .background(baseSurface)
             .then(decoration)
             .then(if (conflict != null) Modifier.semantics(mergeDescendants = true) {
                 contentDescription = "课程冲突：" + conflict.sessions.joinToString("、") { it.courseName } +
@@ -824,47 +979,52 @@ private fun CourseBlock(
             } else Modifier)
             .clickable { onClick(session) },
     ) {
-        // 实验/见习标记：右上角小角标。以前用文字后缀「（实验）」，窄格里会把课名
-        // 挤到截断（issue #6 的「微机原理及接口技术（实…」），角标不占文字区。
-        if (!placeholder && (session.experiment || conflict != null)) {
+        // 实验/见习标记：右上角纯文字微标，去掉实心或胶囊底色
+        if (hasCornerBadge) {
             Text(
                 text = listOfNotNull(if (session.experiment) "实" else null, if (conflict != null) "冲" else null).joinToString("·"),
-                fontSize = 7.sp,
-                lineHeight = 8.sp,
-                color = MaterialTheme.colorScheme.onPrimary,
+                fontSize = 8.sp,
+                lineHeight = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = roomColor,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 1.dp, end = 1.dp)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
-                    .padding(horizontal = 2.dp),
+                    .padding(top = 2.dp, end = 4.dp),
             )
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 2.dp).align(Alignment.Center),
+            modifier = Modifier
+                .padding(
+                    start = 2.dp,
+                    end = 2.dp,
+                    top = if (hasCornerBadge) 12.dp else 2.dp,
+                    bottom = 2.dp,
+                )
+                .align(Alignment.Center),
         ) {
-            // 长课名（研究生常是班级名）自动小一号：行数不变、每行装得更多，
-            // 比"放开行数撑爆格子"稳（issue #6）
-            val nameFont = (prefs.courseFontSp + ScheduleText.fontAdjust(session.courseName))
-                .coerceAtLeast(prefs.courseFontSp - 2)
+            val shownName = CourseShortener.shorten(session.courseName, prefs.smartShortCourseName)
+            val compactFourCharAdjust = if (prefs.dayCount >= 7 && shownName.length == 4 && shownName.none { it.isWhitespace() }) {
+                -0.8f
+            } else {
+                0f
+            }
+            val nameFont = (prefs.courseFontSp + ScheduleText.fontAdjust(shownName) + compactFourCharAdjust)
+                .coerceAtLeast(prefs.courseFontSp - 2.2f)
             if (placeholder) {
                 ConflictPlaceholderTitle(prefs)
                 ConflictCourseNames(conflict!!.sessions, prefs, span)
             } else Text(
-                text = session.courseName,
+                text = shownName,
                 fontSize = nameFont.sp,
                 lineHeight = (nameFont + 2).sp,
-                // 合并后的块更高可以多放几行；单节块 3 行也放得下
-                // （紧凑 34.5dp + 副行 ≈ 44dp < 48dp；标准 39 + 10.5 < 54）
                 maxLines = if (span >= 2) 4 else 3,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
+                color = titleColor,
             )
             val secondary = buildList {
-                // 本科格子按作者的设计只放地点（教师名长、格子小，详情页能看到）。
-                // 研究生课表用户要求看到主讲老师；单节课的块太矮，只在跨节次（span >= 2）时加，
-                // 避免把课名挤掉。
                 if (session.source == GmsScheduleSource.SOURCE && span >= 2) {
                     session.teacherName?.takeIf { it.isNotBlank() }
                         ?.let { add(SlotText.Kind.TEACHER to it) }
@@ -875,8 +1035,6 @@ private fun CourseBlock(
             }
             if (!placeholder) secondary.forEachIndexed { index, (kind, line) ->
                 if (line == null) return@forEachIndexed
-                // 地点自适应（issue #6）：超长先缩一号、再「保头保尾」缩写（楼名…房号），
-                // 行数按块高给（跨节 3 行、单节 1 行）；教师名维持单行。
                 val text = if (kind == SlotText.Kind.ROOM) {
                     ScheduleText.abbreviatePlace(
                         line,
@@ -903,7 +1061,7 @@ private fun CourseBlock(
                     maxLines = maxLines,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = roomColor,
                 )
             }
         }
@@ -913,133 +1071,6 @@ private fun CourseBlock(
 /** 副行的种类：教师 / 地点（地点才享受换行与缩写待遇） */
 private object SlotText {
     enum class Kind { TEACHER, ROOM }
-}
-
-/**
- * 编辑框里的一个教室字段：同一时段里**教室相同**的教学周合成一组；
- * 单双周换教室（单周 302、双周 405）会拆成多组、各自带周次，
- * 覆盖键随之带上周次，互不串扰。[wholeSlot] = 该时段只有一种教室 → 一条覆盖管全部周。
- */
-internal data class RoomEditSlot(
-    val weekday: Int,
-    val startUnit: Int,
-    val endUnit: Int,
-    val room: String?,
-    val weeks: List<Int>,
-    val wholeSlot: Boolean,
-) {
-    /** 与 [DisplayOverridesView.rooms] / [ScheduleViewModel.applyDisplayEdits] 约定的键 */
-    val editKey: String
-        get() = "$weekday|$startUnit" +
-            (if (wholeSlot) "" else "|" + weeks.joinToString(","))
-
-    /** 初始值：精确周的覆盖 → 全部周的覆盖 → 教务原值 */
-    fun initialValue(rooms: Map<String, String>): String =
-        rooms[editKey] ?: rooms["$weekday|$startUnit"] ?: room.orEmpty()
-}
-
-/** 按「时段 → 教室」两级归并出可编辑字段（与详情页分时段明细同一套思路） */
-internal fun roomEditSlots(sessions: List<Session>): List<RoomEditSlot> =
-    sessions.groupBy { it.weekday to it.startUnit }
-        .flatMap { (slot, sameSlot) ->
-            val byRoom = sameSlot.groupBy { it.roomText ?: "" }
-            val groups = (if (byRoom.size == 1) listOf(sameSlot) else byRoom.values.toList())
-                .map { g ->
-                    val head = g.first()
-                    RoomEditSlot(
-                        weekday = slot.first,
-                        startUnit = slot.second,
-                        endUnit = head.endUnit,
-                        room = head.roomText,
-                        weeks = g.map { it.weekIndex }.distinct().sorted(),
-                        wholeSlot = byRoom.size == 1,
-                    )
-                }
-            groups
-        }
-        .sortedWith(compareBy({ it.weekday }, { it.startUnit }, { it.weeks.firstOrNull() ?: 0 }))
-
-/**
- * 编辑一门课的**本地显示**（issue #6 保底）：课程名 + 各时段教室。
- * 只改本机显示，教务刷新不会覆盖；留空 = 恢复教务原值。
- * 同一时段不同周教室不同时按教室拆成多个字段（键带周次），不会互相覆盖。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun EditDisplayDialog(
-    course: Course,
-    overrides: DisplayOverridesView?,
-    onDismiss: () -> Unit,
-    onSave: (String, Map<String, String>) -> Unit,
-) {
-    var name by remember(course) { mutableStateOf(overrides?.name ?: course.nameZh) }
-    val slots = remember(course) { roomEditSlots(course.sessions) }
-    val rooms = remember(course) {
-        val initial = slots.associate { it.editKey to it.initialValue(overrides?.rooms ?: emptyMap()) }
-        mutableStateMapOf(*initial.toList().toTypedArray())
-    }
-    // 多教室的时段（单双周换教室这类）要提示一次，用户才知道为什么拆成了几个字段
-    val multiSlots = remember(course) {
-        slots.groupBy { it.weekday to it.startUnit }
-            .filterValues { it.size > 1 }
-            .map { it.key }
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("编辑显示（仅本机）") },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(
-                    text = "改的是显示，不改教务数据；刷新课表不会被覆盖。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it.take(24) },
-                    label = { Text("课程名") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                slots.forEachIndexed { i, s ->
-                    val key = s.editKey
-                    if ((s.weekday to s.startUnit) in multiSlots &&
-                        slots.getOrNull(i - 1)?.let { it.weekday to it.startUnit } != (s.weekday to s.startUnit)
-                    ) {
-                        Text(
-                            text = "该时段不同周教室不同，已按周拆分：",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                    Text(
-                        text = if (s.wholeSlot) {
-                            "${ScheduleText.weekdayName(s.weekday)} ${s.startUnit}-${s.endUnit} 节"
-                        } else {
-                            "${ScheduleText.weekdayName(s.weekday)} ${s.startUnit}-${s.endUnit} 节 · " +
-                                ScheduleText.compressWeeks(s.weeks)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    OutlinedTextField(
-                        value = rooms[key].orEmpty(),
-                        onValueChange = { rooms[key] = it.take(20) },
-                        label = { Text("教室（清空恢复默认）") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(name.trim(), rooms.toMap()) }) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
 }
 
 /** 这节课此刻正在上 —— 供「正在上的课」描边使用。按真实日期判断，调休也正确。 */
@@ -1057,14 +1088,24 @@ private fun isLiveNow(
     return !now.isBefore(start) && !now.isAfter(end)
 }
 
-/** 按课程代码取色：色相由哈希决定，明度按深浅色模式调整，保证文字始终可读 */
+private val CURATED_COURSE_ACCENTS = listOf(
+    Color(0xFF4A6FA5), // 黛蓝
+    Color(0xFF3E8C84), // 松石
+    Color(0xFF6B8F4E), // 苔绿
+    Color(0xFFB88A2E), // 芥黄
+    Color(0xFFC0703F), // 赭橙
+    Color(0xFF9A3B47), // 枣绯
+    Color(0xFF8A6A9E), // 藕紫
+    Color(0xFF5B88A8), // 雾蓝
+    Color(0xFF5F7C7A), // 岩青
+    Color(0xFF8C6F56), // 茶褐
+)
+
+/** 按课程代码从精选琉璃色板稳定取色 */
 private fun courseColor(code: String, dark: Boolean): Color {
-    val hue = (((code.hashCode() % 360) + 360) % 360).toFloat()
-    return if (dark) {
-        Color.hsl(hue, 0.35f, 0.26f)
-    } else {
-        Color.hsl(hue, 0.55f, 0.88f)
-    }
+    val idx = ((code.hashCode() % CURATED_COURSE_ACCENTS.size) + CURATED_COURSE_ACCENTS.size) %
+        CURATED_COURSE_ACCENTS.size
+    return CURATED_COURSE_ACCENTS[idx]
 }
 
 /**
@@ -1078,7 +1119,7 @@ private fun Modifier.dashedBorder(
     dash: Dp = 4.dp,
     gap: Dp = 3.dp,
     strokeWidth: Dp = 1.dp,
-    radius: Dp = 6.dp,
+    radius: Dp = 8.dp,
 ): Modifier = drawBehind {
     drawRoundRect(
         color = color,
@@ -1201,292 +1242,4 @@ private fun weekdayZh(d: Int): String = when (d) {
     5 -> "五"
     6 -> "六"
     else -> "日"
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun CourseDetailSheet(
-    course: Course,
-    onDismiss: () -> Unit,
-    /** 该课的显示覆盖（issue #6 保底）；有则显示「已自定义」与编辑/恢复入口 */
-    overrides: DisplayOverridesView? = null,
-    onApplyEdits: ((Course, String, Map<String, String>) -> Unit)? = null,
-    onResetOverrides: ((Course) -> Unit)? = null,
-    beforeDetails: @Composable () -> Unit = {},
-) {
-    var editOpen by remember(course) { mutableStateOf(false) }
-    if (editOpen && onApplyEdits != null) {
-        EditDisplayDialog(
-            course = course,
-            overrides = overrides,
-            onDismiss = { editOpen = false },
-            onSave = { name, rooms ->
-                onApplyEdits(course, name, rooms)
-                editOpen = false
-            },
-        )
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            beforeDetails()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    course.nameZh,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (overrides?.any == true) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "已自定义",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                RoundedCornerShape(4.dp),
-                            )
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            // 显示编辑（issue #6 保底）：楼名重复、地点太长这类显示问题，用户可自己改成顺眼的
-            if (onApplyEdits != null) {
-                Row {
-                    TextButton(onClick = { editOpen = true }) {
-                        Icon(Icons.Filled.Edit, contentDescription = null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (overrides?.any == true) "改显示" else "编辑显示")
-                    }
-                    if (overrides?.any == true && onResetOverrides != null) {
-                        TextButton(onClick = { onResetOverrides(course) }) { Text("恢复默认") }
-                    }
-                }
-            }
-            if (course.teachers.isNotEmpty()) {
-                DetailRow("教师", course.teachers.joinToString("、"))
-            }
-            val rooms = course.roomTexts.mapNotNull { ScheduleText.tidyPlace(it) }.distinct()
-            if (rooms.isNotEmpty()) DetailRow("地点", rooms.joinToString("、"))
-            val clock = course.sessions.firstOrNull()?.let { s ->
-                listOfNotNull(s.startTime, s.endTime).takeIf { it.size == 2 }?.joinToString("–")
-            }
-            DetailRow("时间", listOfNotNull(ScheduleText.timeSlots(course.slots), clock).joinToString(" · "))
-            DetailRow("周次", ScheduleText.compressWeeks(course.weeks))
-            // 研究生课程没有课程号时，mapper 会用课程名当 key；别把课程名再显示成"课程代码"
-            if (course.code.isNotBlank() && course.code != course.nameZh) {
-                DetailRow("课程代码", course.code)
-            }
-            course.openDepartment?.takeIf { it.isNotBlank() }?.let { DetailRow("开课院系", it) }
-
-            // 计划 vs 实际：计划 = 每周课表时长，实际 = 这门课累计的番茄钟时长
-            CourseFocusSection(course = course, onStartFocus = onDismiss)
-
-            // 按「时段 → (地点, 教师)」归并：整学期都一样就只列一行，真的不同才拆开。
-            // 只有一行时没必要显示（上面的汇总已经说清楚了）。
-            val slotLines = course.sessions.toSlotLines()
-            if (slotLines.size > 1) {
-                HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                Text("分时段明细", style = MaterialTheme.typography.titleSmall)
-                slotLines.forEach { line ->
-                    val unitText =
-                        if (line.startUnit == line.endUnit) "${line.startUnit}节"
-                        else "${line.startUnit}-${line.endUnit}节"
-                    val detail = listOfNotNull(
-                        line.room,
-                        line.teacher,
-                        ScheduleText.compressWeeks(line.weeks),
-                    ).joinToString(" · ")
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                        Text(
-                            text = "${ScheduleText.weekdayName(line.weekday)} $unitText",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width(104.dp),
-                        )
-                        Text(
-                            text = detail,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * 课程详情里的「计划 vs 实际」。
- *
- * 计划 = 每周课表上这门课的时长；实际 = 这门课累计的番茄钟专注时长。
- * 关联靠 [Session] 的 contextRef（`course:<key>`）—— 从课表点"开始专注"时写进去的。
- */
-@Composable
-private fun CourseFocusSection(course: Course, onStartFocus: () -> Unit) {
-    val records by AppGraph.focusRepository
-        .observeRecords(0L)
-        .collectAsStateWithLifecycle(initialValue = emptyList<FocusRecord>())
-
-    val ref = "course:${course.key}"
-    val focusedSeconds = records
-        .filter { it.contextRef == ref && it.phase == Phase.FOCUS }
-        .sumOf { it.actualSeconds }
-    val plannedMinutes = course.sessions
-        .distinctBy { Triple(it.weekday, it.startUnit, it.endUnit) }
-        .sumOf { minutesBetween(it.startTime, it.endTime) }
-
-    HorizontalDivider(Modifier.padding(vertical = 4.dp))
-    Text("计划 vs 实际", style = MaterialTheme.typography.titleSmall)
-    if (plannedMinutes > 0) {
-        DetailRow("每周课时", FocusStats.humanDuration(plannedMinutes * 60))
-    }
-    DetailRow(
-        "番茄钟累计",
-        if (focusedSeconds > 0) FocusStats.humanDuration(focusedSeconds) else "还没有记录",
-    )
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = {
-            startFocusFor(name = course.nameZh, contextRef = ref)
-            onStartFocus()
-        }) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("开始专注（标签：${course.nameZh}）")
-        }
-    }
-}
-
-/** "08:00" + "09:40" → 100 分钟；拿不到时间就返回 0 */
-private fun minutesBetween(start: String?, end: String?): Int {
-    val a = parseHhmm(start) ?: return 0
-    val b = parseHhmm(end) ?: return 0
-    return (b - a).coerceAtLeast(0)
-}
-
-private fun parseHhmm(text: String?): Int? {
-    val raw = text?.trim().orEmpty()
-    val parts = raw.split(":")
-    if (parts.size != 2) return null
-    val h = parts[0].toIntOrNull() ?: return null
-    val m = parts[1].toIntOrNull() ?: return null
-    return h * 60 + m
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(72.dp),
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SemesterSheet(
-    semesters: List<Semester>,
-    selectedId: Int?,
-    onPick: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-            Text(
-                "选择学期",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            semesters.groupBy { it.schoolYear }.forEach { (year, list) ->
-                Text(
-                    text = year.ifBlank { "其他" },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                )
-                list.forEach { s ->
-                    GlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp)
-                            .clickable { onPick(s.id) },
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = s.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            if (s.isCurrent) {
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "本学期",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            Spacer(Modifier.weight(1f))
-                            if (s.id == selectedId) {
-                                Text(
-                                    "当前",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeekPickerDialog(
-    weeks: List<Int>,
-    current: Int,
-    onPick: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("跳转到教学周") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                weeks.chunked(6).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { w ->
-                            val selected = w == current
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .background(
-                                        color = if (selected) {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                    )
-                                    .clickable { onPick(w) },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text("$w", style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
 }

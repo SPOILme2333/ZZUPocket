@@ -15,6 +15,7 @@ import com.zzupocket.app.data.prefs.DarkMode
 import com.zzupocket.app.data.prefs.ThemePreset
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.ui.theme.MaterialYouScheme
+import com.zzupocket.app.ui.theme.SchemeVariant
 
 /** 小组件实际用到的几个颜色（都由 App 的主题算出来，不是另挑一套） */
 data class WidgetColors(
@@ -86,11 +87,19 @@ object WidgetStyle {
      * 动态取色在个别设备上不可用时 Material3 自己会退回默认配色，不需要我们兜。
      */
     fun scheme(context: Context, prefs: UiPrefs, dark: Boolean): ColorScheme {
-        val seed = prefs.themePreset.seedArgb
+        val variant = runCatching { SchemeVariant.valueOf(prefs.schemeVariantName) }
+            .getOrDefault(SchemeVariant.TONAL_SPOT)
+        if (prefs.themePreset == ThemePreset.ZZU) {
+            return MaterialYouScheme.zzuEmblemScheme(dark = dark, variant = variant)
+        }
+        val seed = when (prefs.themePreset) {
+            ThemePreset.CUSTOM -> prefs.customThemeSeedArgb
+            else -> prefs.themePreset.seedArgb
+        }
         return if (seed == null) {
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         } else {
-            MaterialYouScheme.fromSeed(seed, dark)
+            MaterialYouScheme.fromSeed(seed, dark, variant = variant)
         }
     }
 

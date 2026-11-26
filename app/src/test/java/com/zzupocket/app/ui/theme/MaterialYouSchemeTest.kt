@@ -1,6 +1,8 @@
 package com.zzupocket.app.ui.theme
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -65,5 +67,22 @@ class MaterialYouSchemeTest {
         assertNotEquals(scheme.primary, scheme.onPrimary)
         assertNotEquals(scheme.surface, scheme.onSurface)
         assertNotEquals(scheme.error, scheme.onError)
+    }
+
+    @Test
+    fun `郑大校徽专属双色方案精准还原墨青与枣红且浅深对比正常`() {
+        val light = MaterialYouScheme.zzuEmblemScheme(dark = false)
+        assertEquals(Color(0xFF223C3B), light.primary)
+        assertEquals(Color(0xFF730917), light.tertiary)
+        assertEquals(Color(0xFF730917), light.error)
+        assertEquals(Color(0xFFF4F5F2), light.background)
+        assertTrue("浅色 primary 应偏深以保证白字清晰", light.primary.luminance() < 0.2f)
+
+        val dark = MaterialYouScheme.zzuEmblemScheme(dark = true)
+        assertEquals(Color(0xFFA9C9C5), dark.primary)
+        assertEquals(Color(0xFF2A4644), dark.primaryContainer)
+        assertEquals(Color(0xFFD4656F), dark.tertiary)
+        assertEquals(Color(0xFFD4656F), dark.error)
+        assertTrue("深色 primary 应偏亮以保证可读性", dark.primary.luminance() > 0.35f)
     }
 }
