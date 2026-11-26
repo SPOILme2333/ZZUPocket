@@ -1,12 +1,12 @@
-# ZZUPocket
+# 阳光郑好（ZZUPocket Fork）
 
-郑州大学校园助手（Android）
+基于 [3beuml/ZZUPocket](https://github.com/3beuml/ZZUPocket) 定制升级的郑州大学校园助手（Android）
 
 [![License](https://img.shields.io/github/license/3beuml/ZZUPocket.svg?style=flat)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/3beuml/ZZUPocket?style=flat&label=release)](../../releases)
 [![Android](https://img.shields.io/badge/Android-12%2B-3ddc84?style=flat&logo=android&logoColor=white)](#构建)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7f52ff?style=flat&logo=kotlin&logoColor=white)](#技术栈)
-[![Tests](https://img.shields.io/badge/unit%20tests-445-brightgreen?style=flat)](#参与贡献)
+[![Tests](https://img.shields.io/badge/unit%20tests-481-brightgreen?style=flat)](#参与贡献)
 
 > ⚠️ 本项目是非官方项目。
 > 接口来自公开网页的协议整理与社区项目经验，**随时可能失效或被学校调整**；
@@ -22,13 +22,21 @@
 - **今天**：一条时间轴看"我这一天长什么样"——上课、已完成的专注；冲突提示沿用课表按周显示选择；外加宿舍电量、校园卡余额与今日消费
 - **专注（番茄钟）**：计时引擎 + 前台服务 + 常驻通知，标签管理，周 / 月 / 年统计与热力图
 - **教室占用**：按楼筛选，每间教室哪几节有课（数据来自教务系统）
+- **学业查询**：成绩单与绩点统计、考试安排、学籍信息原生展示与本地缓存
+- **培养方案与完成情况**：完整对接教务系统 6 个官方只读接口，支持「培养方案 / 完成情况」双模式切换与各模块学分进度查看
+- **课表导出与提醒**：支持标准 `.ics` 日历导出、课前提醒通知及重要日期倒计时
 
 **生活**
 
 - **电费**：照明 / 空调两套表计的余额、每日用量、电费估算、按日明细、余额趋势；
-  房间号内置 59 栋楼的房间表（选楼栋 → 选房号），也支持手动填 ID
+  房间号内置 59 栋楼的房间表（选楼栋 → 选房号），也支持手动填 ID；支持低电量自动预警通知
 - **校园卡**：余额、日 / 周 / 月 / 年消费、流水明细与筛选
+- **校园资讯**：多栏目资讯抓取、详情净化、正文附件清单提取、分页加载、本地缓存与可选 AI 摘要
 - **图书馆座位**：内嵌学校原版网页（自动用统一身份认证登录）
+
+**界面与外观**
+
+- **视觉与主题**：Material You 动态取色与多套预设配色、Bento 卡片与液态玻璃（Liquid Glass）视觉组件、独立设置页
 
 **桌面小组件**（RemoteViews + XML，不联网、只读本地数据）
 
@@ -39,6 +47,28 @@
 
 
 ## 更新记录
+
+**0.38.0（2026-11-26）**
+
+- **校园资讯抓取与阅读升级**：
+  - 多栏目独立缓存不再互相覆盖，支持列表分页加载与增量刷新；
+  - 修复新闻网列表及详情页发布日期丢失问题，支持自动提取正文附件清单；
+  - 清洗来源字段中的 `<script>`、`<i>` 图标字及 Unicode 私用区乱码字符；
+  - Room 数据库无损升级 `v12 → v13`（含 `MIGRATION_12_13`，覆盖安装保留历史数据），支持原生详情页与可选 AI 摘要。
+- **教务培养方案与完成情况全量原生接入**：
+  - 完整对接 `eams-student-plan-app` 与 `eams-student-plan-complete-app` 全部 6 个官方只读接口，支持「培养方案 / 完成情况」双模式视图、模块学分进度汇总及校园看板直达入口；
+  - 校准教务「在读」修读状态映射，修复部分在读课程被误判为未修的问题；
+  - 将官网培养方案地址探测接入零信任网关（`NoxGatewayClient`）自动恢复链路。
+- **学业查询、日常提醒与课表工具**：
+  - 新增成绩查询与绩点统计、考试安排、学籍信息及重要日期倒计时；
+  - 新增课前通知提醒与宿舍低电量预警推送，并支持标准 `.ics` 课表日历导出。
+- **视觉重构与体验加固**：
+  - 引入 Bento 卡片、液态玻璃（Liquid Glass）视觉组件与 Material You 配色体系升级，拆分独立设置页；
+  - 修复首帧 `UiPrefsStore` 偏好状态残留问题，并加固内嵌 WebView 安全性。
+- **品牌与启动器图标定制（阳光郑好）**：
+  - 应用更名为「阳光郑好」，启动器图标替换为高清自适应校徽图标（前景按 56% 居中留白适配主流超椭圆/圆形遮罩）；
+  - Release 包启用 R8 混淆与资源裁剪，版本号升级至 `0.38.0 / versionCode 125`；
+  - 单元测试 **445 → 481**（55 suites 全绿通过）并完成真机全链路回归验证。
 
 **0.36.6（2026-11-25）**
 
@@ -178,7 +208,7 @@
 
 ## 下载安装
 
-到 [Releases](../../releases) 下载最新的 `ZZUPocket-0.36.6.apk`，在手机上安装即可
+到 [Releases](../../releases) 下载最新的 `阳光郑好-v0.38.0.apk`（或对应版本安装包），在手机上安装即可
 （Android 12 / API 31 及以上）。
 
 - 装在手机上会走系统的"未知来源应用"授权；Flyme / MIUI 这类系统还需要在
@@ -220,18 +250,20 @@ app/src/main/java/com/zzupocket/app/
 │                    错误文案、课表文本、登录输入体检、学期过滤
 ├── data/
 │   ├── auth/        CAS 统一认证（MFA / 短信 / 令牌刷新）
-│   ├── eas/         教务系统（课表、节次、教室占用）
+│   ├── eas/         教务系统（课表、节次、教室占用、成绩/考试/学籍、培养方案与完成情况）
 │   ├── ecard/       一卡通（电费、校园卡流水）
 │   ├── lib/         图书馆（WebView 会话与探测）
-│   ├── db/          Room 实体与 DAO
+│   ├── news/        校园资讯（多栏目抓取解析、附件提取、可选 AI 摘要）
+│   ├── db/          Room 实体与 DAO（当前 Schema v13）
 │   ├── prefs/       DataStore（界面偏好、专注偏好、登录冷却）+ 加密令牌
 │   ├── room/        宿舍楼房间表（assets/rooms.json）
-│   ├── repo/        Repository：把接口与本地库缝在一起
+│   ├── repo/        Repository：把接口与本地库缝在一起（含学业、倒计时、ICS 导出）
 │   └── work/        定时采样电量（WorkManager）
-├── domain/          纯数据模型与统计口径（课表、用电、专注、校园卡、周次对齐）
+├── domain/          纯数据模型与统计口径（课表、学业、培养方案、倒计时、ICS 导出、用电、专注、校园卡）
 ├── focus/           番茄钟引擎、通知、前台服务
-└── ui/              Compose 界面：today / schedule / focus / campus / library /
-                     widget（桌面小组件）/ login / about / diag / theme / nav
+├── notify/          课前提醒规划与调度、低电量预警通知
+└── ui/              Compose 界面：today / schedule / focus / campus / academic / news /
+                     library / widget（桌面小组件）/ settings / login / about / diag / theme / nav
 
 app/src/main/res/    资源：布局（含 widget_* 小组件布局）、配色、字符串、预览图
 docs/                项目文档（接口契约、实测坑、设计推演），见下方「文档」
